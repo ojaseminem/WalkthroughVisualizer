@@ -14,7 +14,8 @@
     "preview": "npm run preview --workspace @wv/viewer",
     "scene": "cd tools/modelgen && python3 generate_tower.py ../../apps/viewer/public/content/kp-tower/scene.glb",
     "verify": "node tools/verify/capture.mjs --serve apps/viewer/dist",
-    "check": "npm run scene && npm run build && npm run verify"
+    "check": "npm run scene && npm run build && npm run verify",
+    "verify:ci": "node tools/verify/capture.mjs --serve apps/viewer/dist --shots low --shot-budget 300000"
   },
   "license": "UNLICENSED",
   "devDependencies": {

@@ -105,17 +105,28 @@ draw calls.
 ## Verification
 
 ```bash
-npm run check      # generate scene -> build -> verify
-npm run verify     # just the checks, against an existing build
+npm run check       # generate scene -> build -> verify
+npm run verify      # just the checks, full-quality screenshots  (~2.5 min)
+npm run verify:ci   # low-quality screenshots, what CI runs      (~1.5 min)
 ```
 
 The harness serves `apps/viewer/dist` itself on an OS-assigned port, so there is
-no background server, no fixed port, and no startup race in CI. Point it at a
-running dev server instead with `--url http://localhost:5173/`.
+no background server, no fixed port, and no startup race. Point it at a running
+dev server instead with `--url http://localhost:5173/`.
 
-23 checks across the registry, movement, and render budgets, plus 13 screenshots
-into `tools/verify/out/`. Movement is driven at a fixed timestep rather than
-wall-clock, so the results do not depend on the (software) rasteriser's speed.
+23 checks across the registry, movement, and render budgets, then 15 screenshots
+into `tools/verify/out/`. Three deliberate choices, each of which cost a CI run
+to learn:
+
+- **Movement runs at a fixed timestep**, not wall-clock. Headless Chromium has no
+  GPU and rasterises in software at around one frame per second, so a
+  wall-clock walk test measures the rasteriser, not the movement code.
+- **Checks are decided and printed before any screenshot is taken.** A screenshot
+  timeout must never swallow the diagnostic output.
+- **Screenshots are bounded and non-fatal.** They are a human artifact, not a
+  build gate: a failed or skipped shot is reported by name, never thrown. CI uses
+  `--shots low` (smaller viewport, shadows off) because a GPU-less runner cannot
+  rasterise a full-size WebGL frame inside Playwright's screenshot timeout.
 
 The physics checks assert against real geometry coordinates — the player must
 stop at x = 13.82 because the wall's inner face is at 13.50 and the capsule

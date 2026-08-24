@@ -86,7 +86,10 @@ const browser = await chromium.launch({
     '--ignore-gpu-blocklist', '--disable-dev-shm-usage',
   ],
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+// Start small. Draw-call and triangle counts do not depend on viewport size,
+// physics runs at a fixed timestep, and every pixel costs real seconds on a
+// software rasteriser. The viewport is scaled up later, for screenshots only.
+const page = await browser.newPage({ viewport: { width: 1024, height: 640 }, deviceScaleFactor: 1 });
 
 page.on('console', (m) => {
   const t = m.text();
@@ -237,7 +240,7 @@ check('stair does not punch the slab', physics.stairTopY < 6.4,
 // Perf sample
 // --------------------------------------------------------------------------- //
 
-const perf = await page.evaluate(async () => {
+const perf = await page.evaluate(async (frameCount) => {
   const wv = window.wv;
   wv.setLevel('L01', { teleport: false });
   wv.player.teleport(16.2, 3.4, 3.4, -2.3);
@@ -246,22 +249,26 @@ const perf = await page.evaluate(async () => {
     let n = 0;
     const t = (last) => (ts) => {
       if (last) frames.push(ts - last);
-      if (++n > 90) return res();
+      if (++n > frameCount) return res();
       requestAnimationFrame(t(ts));
     };
     requestAnimationFrame(t(0));
   });
   frames.sort((a, b) => a - b);
   return {
-    medianMs: frames[Math.floor(frames.length / 2)],
-    p95Ms: frames[Math.floor(frames.length * 0.95)],
+    medianMs: frames[Math.floor(frames.length / 2)] ?? 0,
+    p95Ms: frames[Math.floor(frames.length * 0.95)] ?? 0,
+    sampled: frames.length,
     drawCalls: wv.renderer.info.render.calls,
     triangles: wv.renderer.info.render.triangles,
     programs: wv.renderer.info.programs.length,
     textures: wv.renderer.info.memory.textures,
     geometries: wv.renderer.info.memory.geometries,
   };
-});
+}, Number(args['perf-frames'] ?? 8));
+// Eight frames, not ninety. The draw-call and triangle counts settle on the
+// first frame, and the timings are software-rasteriser noise either way — the
+// long sample was costing minutes of CI to measure nothing.
 
 // SwiftShader is a software rasteriser — absolute timings mean nothing here.
 // Draw calls and triangle counts are the numbers that carry to real hardware.
@@ -269,79 +276,12 @@ check('draw calls within budget', perf.drawCalls <= 150, `${perf.drawCalls} / 15
 check('triangles within budget', perf.triangles <= 180000, `${perf.triangles} / 180000`);
 
 // --------------------------------------------------------------------------- //
-// Screenshots
+// Report the checks BEFORE anything slow
+//
+// Screenshots are the expensive part and they run on a software rasteriser, so
+// they must never be able to swallow the diagnostic output. Everything that can
+// fail the build is decided and printed here.
 // --------------------------------------------------------------------------- //
-
-// Dismiss the entry overlays so the shots show the scene, not the splash.
-await page.evaluate(() => {
-  for (const id of ['loader', 'start']) document.getElementById(id).classList.add('hidden');
-});
-
-for (const s of SHOTS) {
-  await page.evaluate(async (shot) => {
-    const wv = window.wv;
-    wv.setTimeOfDay(shot.tod);
-    wv.setLevel(shot.level, { teleport: false });
-    wv.player.enabled = true;
-    if (shot.free) {
-      wv.player.enabled = false;
-      wv.camera.position.set(...shot.free);
-      wv.camera.up.set(0, 1, 0);
-      wv.camera.lookAt(...shot.look);
-    } else {
-      wv.player.enabled = true;
-      wv.player.teleport(shot.pos[0], shot.pos[1], shot.pos[2], shot.yaw);
-      wv.player.pitch = shot.pitch;
-      wv.player.update(1 / 60);
-    }
-  }, s);
-  // Software rasterisation runs near 1 fps, so wait for real frames to land
-  // rather than a nominal settle time.
-  await page.evaluate(() => new Promise((res) => {
-    let n = 0;
-    const t = () => (++n >= 3 ? res() : requestAnimationFrame(t));
-    requestAnimationFrame(t);
-  }));
-  await page.screenshot({ path: `${OUT}/${s.name}.png` });
-}
-
-// UI states worth capturing.
-await page.evaluate(() => {
-  window.wv.player.enabled = true;
-  window.wv.setLevel('L01');
-  window.wv.setTimeOfDay('noon');
-  document.getElementById('btn-rooms').click();
-});
-await page.evaluate(() => new Promise((res) => {
-  let n = 0; const t = () => (++n >= 3 ? res() : requestAnimationFrame(t)); requestAnimationFrame(t);
-}));
-await page.screenshot({ path: `${OUT}/09-directory.png` });
-
-await page.evaluate(() => {
-  document.getElementById('btn-rooms').click();
-  const poi = window.wv.reg.poiById.get('l01.a.living');
-  window.wv.goToPoi('l01.a.living');
-  window.dispatchEvent(new Event('resize'));
-  return poi;
-});
-await page.evaluate(() => {
-  const ev = new MouseEvent('mousedown', { clientX: 0, clientY: 0 });
-  const wv = window.wv;
-  // Open the panel through the public path the UI uses.
-  const poi = wv.reg.poiById.get('l01.a.kitchen');
-  wv.goToPoi('l01.a.kitchen');
-  wv.pois.setHovered(poi);
-});
-await page.evaluate(() => new Promise((res) => {
-  let n = 0; const t = () => (++n >= 4 ? res() : requestAnimationFrame(t)); requestAnimationFrame(t);
-}));
-await page.screenshot({ path: `${OUT}/10-poi-approach.png` });
-
-// --------------------------------------------------------------------------- //
-// Report
-// --------------------------------------------------------------------------- //
-
-await browser.close();
 
 // Google Fonts is unreachable from a sandboxed runner; that is the environment,
 // not the app. A URL that also came back 2xx is not a failure either — Chromium
@@ -359,10 +299,7 @@ const realErrors = errors.filter(
 check('no failed app requests', appFailures.length === 0, appFailures.slice(0, 3).join(' | '));
 check('no console errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
-const report = { url: URL_BASE, registry: reg, physics, perf, checks, errors: realErrors, failedRequests: failedUrls, succeededRequests: [...okUrls], warnings: reg.warnings };
-writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 2));
-
-const pad = (s, n) => String(s).padEnd(n);
+const pad = (str, n) => String(str).padEnd(n);
 console.log('\n  M1 verification\n  ' + '-'.repeat(64));
 for (const c of checks) {
   console.log(`  ${c.ok ? 'PASS' : 'FAIL'}  ${pad(c.name, 34)} ${c.detail}`);
@@ -370,9 +307,116 @@ for (const c of checks) {
 console.log('  ' + '-'.repeat(64));
 console.log(`  scene    ${reg.zones} zones · ${reg.pois} POIs · ${reg.portals} portals · ${reg.navBlocks} collision volumes`);
 console.log(`  render   ${perf.drawCalls} draw calls · ${perf.triangles} triangles · ${perf.programs} programs`);
-console.log(`  frames   median ${perf.medianMs.toFixed(1)}ms · p95 ${perf.p95Ms.toFixed(1)}ms  (software raster — indicative only)`);
+console.log(`  frames   median ${perf.medianMs.toFixed(1)}ms over ${perf.sampled} (software raster — indicative only)`);
 if (reg.warnings.length) console.log(`  warnings ${reg.warnings.length} (see report.json)`);
 
 const failed = checks.filter((c) => !c.ok);
-console.log(`\n  ${checks.length - failed.length}/${checks.length} checks passed\n`);
+console.log(`\n  ${checks.length - failed.length}/${checks.length} checks passed`);
+
+// --------------------------------------------------------------------------- //
+// Screenshots — a human artifact, bounded and non-fatal
+//
+// On a GPU-less runner a single 1440x900 WebGL frame can exceed Playwright's
+// screenshot timeout. Low quality shrinks the viewport and drops shadows, which
+// is the difference between reliable pictures and none at all. A shot that fails
+// is reported, never thrown — a slow rasteriser is not a regression.
+// --------------------------------------------------------------------------- //
+
+const SHOT_QUALITY = args['shots'] ?? 'full';         // full | low | off
+const SHOT_BUDGET_MS = Number(args['shot-budget'] ?? 240000);
+const shotResults = { taken: [], failed: [], skipped: [] };
+
+if (SHOT_QUALITY !== 'off') {
+  page.setDefaultTimeout(60000);
+
+  if (SHOT_QUALITY === 'low') {
+    await page.setViewportSize({ width: 960, height: 600 });
+    await page.evaluate(() => {
+      window.wv.renderer.shadowMap.enabled = false;
+      window.wv.sun.castShadow = false;
+    });
+  } else {
+    await page.setViewportSize({ width: 1280, height: 800 });
+  }
+
+  // Dismiss the entry overlays so the shots show the scene, not the splash.
+  await page.evaluate(() => {
+    for (const id of ['loader', 'start']) document.getElementById(id).classList.add('hidden');
+  });
+
+  const started = Date.now();
+  const settle = (frames = 2) => page.evaluate((n) => new Promise((res) => {
+    let i = 0;
+    const t = () => (++i >= n ? res() : requestAnimationFrame(t));
+    requestAnimationFrame(t);
+  }), frames);
+
+  async function shoot(name, setup, frames = 2) {
+    if (Date.now() - started > SHOT_BUDGET_MS) {
+      shotResults.skipped.push(name);
+      return;
+    }
+    try {
+      if (setup) await setup();
+      await settle(frames);
+      await page.screenshot({ path: `${OUT}/${name}.png`, timeout: 60000 });
+      shotResults.taken.push(name);
+    } catch (err) {
+      shotResults.failed.push(`${name}: ${err.message.split('\n')[0]}`);
+    }
+  }
+
+  for (const s of SHOTS) {
+    await shoot(s.name, () => page.evaluate((shot) => {
+      const wv = window.wv;
+      wv.setTimeOfDay(shot.tod);
+      wv.setLevel(shot.level, { teleport: false });
+      if (shot.free) {
+        wv.player.enabled = false;
+        wv.camera.position.set(...shot.free);
+        wv.camera.up.set(0, 1, 0);
+        wv.camera.lookAt(...shot.look);
+      } else {
+        wv.player.enabled = true;
+        wv.player.teleport(shot.pos[0], shot.pos[1], shot.pos[2], shot.yaw);
+        wv.player.pitch = shot.pitch;
+        wv.player.update(1 / 60);
+      }
+    }, s));
+  }
+
+  await shoot('14-directory', () => page.evaluate(() => {
+    window.wv.player.enabled = true;
+    window.wv.setLevel('L01');
+    window.wv.setTimeOfDay('noon');
+    document.getElementById('btn-rooms').click();
+  }));
+
+  await shoot('15-poi-panel', () => page.evaluate(() => {
+    document.getElementById('btn-rooms').click();
+    const wv = window.wv;
+    const poi = wv.reg.poiById.get('l01.a.kitchen');
+    wv.goToPoi('l01.a.kitchen');
+    wv.pois.setHovered(poi);
+  }), 3);
+
+  const line = [`${shotResults.taken.length} taken`];
+  if (shotResults.failed.length) line.push(`${shotResults.failed.length} failed`);
+  if (shotResults.skipped.length) line.push(`${shotResults.skipped.length} skipped (time budget)`);
+  console.log(`  screenshots  ${line.join(' · ')}  [${SHOT_QUALITY} quality]`);
+  for (const f of shotResults.failed) console.log(`    ! ${f}`);
+  if (shotResults.skipped.length) console.log(`    - skipped: ${shotResults.skipped.join(', ')}`);
+}
+console.log('');
+
+await browser.close();
+if (server) await server.close();
+
+const report = {
+  url: URL_BASE, registry: reg, physics, perf, checks,
+  errors: realErrors, failedRequests: failedUrls, succeededRequests: [...okUrls],
+  screenshots: shotResults, warnings: reg.warnings,
+};
+writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 2));
+
 process.exit(failed.length ? 1 : 0);

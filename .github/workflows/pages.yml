@@ -43,10 +43,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Screenshots run at low quality here: a GPU-less runner cannot rasterise a
+      # full-size WebGL frame inside Playwright's screenshot timeout. The checks
+      # themselves are viewport-independent and gate the build; shot failures are
+      # reported, never fatal.
       - name: Verify
         run: |
           npx playwright install --with-deps chromium
-          npm run verify
+          npm run verify:ci
 
       - name: Upload verification screenshots
         if: always()
