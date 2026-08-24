@@ -105,10 +105,13 @@ draw calls.
 ## Verification
 
 ```bash
-npm run build
-npx vite preview --port 4173 --outDir dist   # from apps/viewer
-node tools/verify/capture.mjs --url http://127.0.0.1:4173/
+npm run check      # generate scene -> build -> verify
+npm run verify     # just the checks, against an existing build
 ```
+
+The harness serves `apps/viewer/dist` itself on an OS-assigned port, so there is
+no background server, no fixed port, and no startup race in CI. Point it at a
+running dev server instead with `--url http://localhost:5173/`.
 
 23 checks across the registry, movement, and render budgets, plus 13 screenshots
 into `tools/verify/out/`. Movement is driven at a fixed timestep rather than

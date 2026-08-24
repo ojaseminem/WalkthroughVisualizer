@@ -11,13 +11,28 @@
  */
 
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { serve } from './serve.mjs';
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a, i, arr) => a.startsWith('--') ? [a.slice(2), arr[i + 1]] : []).filter(Boolean),
 );
-const URL_BASE = args.url || 'http://localhost:4173/';
+
+// Either point at a running dev server, or hand over a built directory and let
+// the harness serve it. The second form is what CI uses — no background process,
+// no fixed port, no startup race.
+const SERVE_DIR = args.serve ?? (args.url ? null : 'apps/viewer/dist');
+let server = null;
+if (SERVE_DIR) {
+  if (!existsSync(resolve(SERVE_DIR))) {
+    console.error(`\n  Nothing to serve at ${resolve(SERVE_DIR)} — run \`npm run build\` first.\n`);
+    process.exit(2);
+  }
+  server = await serve(SERVE_DIR);
+}
+const URL_BASE = server ? server.url : args.url;
+
 const OUT = resolve('tools/verify/out');
 mkdirSync(OUT, { recursive: true });
 
@@ -28,7 +43,7 @@ const SHOTS = [
   { name: '02-corridor', level: 'L01',  pos: [17.5, 3.2, -1.0], yaw: Math.PI / 2, pitch: -0.02, tod: 'noon' },
   { name: '03-living',   level: 'L01',  pos: [14.9, 3.2, 2.5],  yaw: -2.36,      pitch: -0.08, tod: 'noon' },
   { name: '04-dining',   level: 'L01',  pos: [15.4, 3.2, 2.6],  yaw: 0.0,        pitch: -0.10, tod: 'morning' },
-  { name: '05-kitchen',  level: 'L02',  pos: [19.8, 6.2, 2.4],  yaw: 0.0,        pitch: -0.14, tod: 'noon' },
+  { name: '05-kitchen',  level: 'L02',  pos: [18.3, 6.2, 2.55], yaw: -Math.PI / 2, pitch: -0.08, tod: 'noon' },
   { name: '06-mbed',     level: 'L02',  pos: [16.6, 6.2, 7.3],  yaw: 2.32,       pitch: -0.06, tod: 'evening' },
   { name: '07-bed2',     level: 'L02',  pos: [20.4, 6.2, 7.1],  yaw: 0.0,        pitch: -0.08, tod: 'noon' },
   { name: '08-sundeck',  level: 'L03',  pos: [20.4, 9.2, 8.6],  yaw: -2.36,      pitch: 0.02,  tod: 'evening' },
@@ -46,7 +61,6 @@ const warnings = [];
 
 // The container ships a Chromium under PLAYWRIGHT_BROWSERS_PATH that may not match
 // the npm package's expected build number, so point at it explicitly.
-import { existsSync, readdirSync } from 'node:fs';
 function findChromium() {
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
   if (!existsSync(root)) return undefined;
@@ -58,6 +72,12 @@ function findChromium() {
   }
   return undefined;
 }
+
+process.on('uncaughtException', async (err) => {
+  console.error(err);
+  if (server) await server.close();
+  process.exit(1);
+});
 
 const browser = await chromium.launch({
   executablePath: findChromium(),
@@ -75,8 +95,12 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 const failedUrls = [];
+const okUrls = new Set();
 page.on('requestfailed', (r) => failedUrls.push(`${r.url()} :: ${r.failure()?.errorText}`));
-page.on('response', (r) => { if (r.status() >= 400) failedUrls.push(`${r.url()} :: HTTP ${r.status()}`); });
+page.on('response', (r) => {
+  if (r.status() >= 400) failedUrls.push(`${r.url()} :: HTTP ${r.status()}`);
+  else okUrls.add(r.url());
+});
 
 await page.goto(URL_BASE, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.wv && window.wv.reg, null, { timeout: 60000 });
@@ -319,9 +343,15 @@ await page.screenshot({ path: `${OUT}/10-poi-approach.png` });
 
 await browser.close();
 
-// Google Fonts is unreachable from the sandbox; that is the environment, not the app.
+// Google Fonts is unreachable from a sandboxed runner; that is the environment,
+// not the app. A URL that also came back 2xx is not a failure either — Chromium
+// reports ERR_ABORTED for duplicate and speculative requests that it cancels
+// itself, and the asset still arrived.
 const EXTERNAL = /fonts\.(googleapis|gstatic)\.com/;
-const appFailures = failedUrls.filter((u) => !EXTERNAL.test(u));
+const appFailures = failedUrls.filter((entry) => {
+  const url = entry.split(' :: ')[0];
+  return !EXTERNAL.test(url) && !okUrls.has(url);
+});
 const realErrors = errors.filter(
   (e) => !/WebGL|SwiftShader|GPU stall|net::ERR_FAILED|net::ERR_TUNNEL_CONNECTION_FAILED/i.test(e)
     && !(/Failed to load resource/i.test(e) && appFailures.length === 0),
@@ -329,7 +359,7 @@ const realErrors = errors.filter(
 check('no failed app requests', appFailures.length === 0, appFailures.slice(0, 3).join(' | '));
 check('no console errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
-const report = { url: URL_BASE, registry: reg, physics, perf, checks, errors: realErrors, failedRequests: failedUrls, warnings: reg.warnings };
+const report = { url: URL_BASE, registry: reg, physics, perf, checks, errors: realErrors, failedRequests: failedUrls, succeededRequests: [...okUrls], warnings: reg.warnings };
 writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 2));
 
 const pad = (s, n) => String(s).padEnd(n);

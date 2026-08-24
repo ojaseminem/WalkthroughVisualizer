@@ -12,11 +12,12 @@
     "dev": "npm run dev --workspace @wv/viewer",
     "build": "npm run build --workspace @wv/viewer",
     "preview": "npm run preview --workspace @wv/viewer",
-    "scene": "cd tools/modelgen && python3 generate_tower.py ../../apps/viewer/public/content/kp-tower/scene.glb"
+    "scene": "cd tools/modelgen && python3 generate_tower.py ../../apps/viewer/public/content/kp-tower/scene.glb",
+    "verify": "node tools/verify/capture.mjs --serve apps/viewer/dist",
+    "check": "npm run scene && npm run build && npm run verify"
   },
   "license": "UNLICENSED",
   "devDependencies": {
-    "playwright": "^1.62.1",
-    "wait-on": "^9.1.0"
+    "playwright": "^1.62.1"
   }
 }

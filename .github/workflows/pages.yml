@@ -46,11 +46,7 @@ jobs:
       - name: Verify
         run: |
           npx playwright install --with-deps chromium
-          npx vite preview --port 4173 --host 127.0.0.1 --outDir dist &
-          npx wait-on http://127.0.0.1:4173/ -t 60000
-          node tools/verify/capture.mjs --url http://127.0.0.1:4173/
-        working-directory: .
-        continue-on-error: false
+          npm run verify
 
       - name: Upload verification screenshots
         if: always()
