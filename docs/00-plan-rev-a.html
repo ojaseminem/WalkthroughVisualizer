@@ -1,0 +1,586 @@
+<title>Walkthrough Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+:root{
+  --bg:#EEF0EA; --surface:#F7F8F4; --surface-2:#E5E8E0;
+  --ink:#1B211E; --muted:#6B736C; --rule:#C9CEC4; --rule-soft:#DCE0D8;
+  --accent:#C4341F; --accent-soft:#F0DCD7;
+  --second:#2F6B6B; --second-soft:#DCE7E5;
+  --ok:#3E6B3A;
+  --display:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --body:'Source Serif 4',Georgia,'Times New Roman',serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --measure:68ch;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14181A; --surface:#1C2124; --surface-2:#232A2D;
+    --ink:#E6E9E3; --muted:#98A09A; --rule:#333A3C; --rule-soft:#272E31;
+    --accent:#E8563C; --accent-soft:#3A211C;
+    --second:#6FB0AC; --second-soft:#1E2E2E;
+    --ok:#7DA871;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14181A; --surface:#1C2124; --surface-2:#232A2D;
+  --ink:#E6E9E3; --muted:#98A09A; --rule:#333A3C; --rule-soft:#272E31;
+  --accent:#E8563C; --accent-soft:#3A211C;
+  --second:#6FB0AC; --second-soft:#1E2E2E;
+  --ok:#7DA871;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--body); font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--ink); text-decoration-color:var(--accent); text-underline-offset:3px; text-decoration-thickness:1px}
+a:hover{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent); outline-offset:3px}
+
+.shell{display:grid; grid-template-columns:minmax(0,1fr); max-width:1180px; margin:0 auto; padding:0 24px}
+@media(min-width:1040px){ .shell{grid-template-columns:200px minmax(0,1fr); gap:56px} }
+
+/* ---- sheet index rail ---- */
+.rail{display:none}
+@media(min-width:1040px){
+  .rail{display:block; position:sticky; top:0; align-self:start; height:100vh; padding:56px 0; overflow-y:auto}
+}
+.rail h6{
+  font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); margin:0 0 14px; font-weight:500;
+}
+.rail ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
+.rail a{
+  display:grid; grid-template-columns:34px 1fr; gap:8px; align-items:baseline;
+  font-family:var(--display); font-size:12.5px; font-weight:500; letter-spacing:.01em;
+  text-decoration:none; color:var(--muted); padding:5px 6px 5px 0; border-left:2px solid transparent; padding-left:10px;
+}
+.rail a:hover{color:var(--ink); border-left-color:var(--accent); background:var(--surface)}
+.rail a span{font-family:var(--mono); font-size:10.5px; color:var(--rule)}
+.rail a:hover span{color:var(--accent)}
+
+main{min-width:0; padding:56px 0 120px; max-width:var(--measure)}
+
+/* ---- masthead ---- */
+.masthead{border-top:3px solid var(--ink); padding-top:18px; margin-bottom:64px}
+.stamp{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted);
+  margin-bottom:26px;
+}
+.stamp b{font-weight:500; color:var(--ink)}
+.dot{width:4px;height:4px;border-radius:50%;background:var(--rule)}
+.gate{
+  color:var(--accent); border:1px solid var(--accent); border-radius:2px; padding:3px 8px; font-weight:600;
+}
+h1{
+  font-family:var(--display); font-weight:700; letter-spacing:-.025em; line-height:.94;
+  font-size:clamp(44px,8.5vw,80px); margin:0 0 22px; text-wrap:balance;
+}
+h1 em{font-style:normal; color:var(--accent)}
+.lede{font-size:20px; line-height:1.55; margin:0; color:var(--ink)}
+.lede + .lede{margin-top:16px; color:var(--muted); font-size:18px}
+
+/* ---- sections ---- */
+section{margin-top:76px; scroll-margin-top:24px}
+.shead{
+  display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:baseline;
+  border-top:1px solid var(--ink); padding-top:12px; margin-bottom:26px;
+}
+.shead .code{font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--accent); font-weight:600}
+.shead h2{
+  font-family:var(--display); font-weight:600; letter-spacing:-.015em; line-height:1.1;
+  font-size:clamp(24px,3.4vw,31px); margin:0; text-wrap:balance;
+}
+h3{
+  font-family:var(--display); font-weight:600; font-size:15px; letter-spacing:.005em;
+  margin:38px 0 12px; text-transform:none;
+}
+.eyebrow{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--muted); margin:34px 0 12px; font-weight:500;
+}
+p{margin:0 0 16px}
+ul,ol{margin:0 0 16px; padding-left:20px}
+li{margin-bottom:7px}
+li::marker{color:var(--muted)}
+strong{font-weight:600}
+code{
+  font-family:var(--mono); font-size:.86em; background:var(--surface-2);
+  padding:1px 5px; border-radius:2px; color:var(--ink);
+}
+
+/* ---- positioning table ---- */
+.wrap-x{overflow-x:auto; margin:0 0 18px; border:1px solid var(--rule-soft); border-radius:3px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14px; font-family:var(--display); font-weight:500}
+th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+th{
+  font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted); font-weight:500; background:var(--surface-2); white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.us{color:var(--accent); font-weight:600}
+
+/* ---- reference cards ---- */
+.refgrid{display:grid; gap:1px; background:var(--rule-soft); border:1px solid var(--rule-soft); border-radius:3px; margin-bottom:8px}
+@media(min-width:680px){ .refgrid{grid-template-columns:1fr 1fr} }
+.ref{background:var(--surface); padding:16px 18px; display:flex; flex-direction:column; gap:7px}
+.ref .n{font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.1em}
+.ref .t{font-family:var(--display); font-weight:600; font-size:15px; line-height:1.3; margin:0}
+.ref .t a{text-decoration:none; border-bottom:1px solid var(--rule); padding-bottom:1px}
+.ref .t a:hover{border-bottom-color:var(--accent)}
+.ref .take{font-size:14.5px; line-height:1.5; color:var(--muted); margin:0}
+.ref .take b{color:var(--ink); font-weight:600}
+.ref .url{font-family:var(--mono); font-size:10.5px; color:var(--rule); word-break:break-all; margin:0}
+
+/* ---- layer diagram ---- */
+figure{margin:0 0 22px}
+.diagram{width:100%; height:auto; display:block; border:1px solid var(--rule-soft); border-radius:3px; background:var(--surface)}
+figcaption{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted); margin-top:9px}
+
+/* ---- code block ---- */
+pre{
+  font-family:var(--mono); font-size:12.5px; line-height:1.65; background:var(--surface);
+  border:1px solid var(--rule-soft); border-left:2px solid var(--second); border-radius:3px;
+  padding:16px 18px; overflow-x:auto; margin:0 0 18px; color:var(--ink);
+}
+pre .k{color:var(--second)}
+pre .s{color:var(--accent)}
+pre .c{color:var(--muted)}
+
+/* ---- preset split ---- */
+.split{display:grid; gap:1px; background:var(--rule-soft); border:1px solid var(--rule-soft); border-radius:3px; margin-bottom:18px}
+@media(min-width:680px){ .split{grid-template-columns:1fr 1fr} }
+.pane{background:var(--surface); padding:18px 20px}
+.pane h4{font-family:var(--display); font-size:14px; font-weight:600; margin:0 0 4px}
+.pane .sub{font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 14px}
+.pane ul{margin:0; padding-left:17px; font-family:var(--display); font-weight:500; font-size:14px; line-height:1.5}
+.pane li{margin-bottom:6px}
+
+/* ---- milestones ---- */
+.miles{display:flex; flex-direction:column; border:1px solid var(--rule-soft); border-radius:3px; overflow:hidden}
+.mile{display:grid; grid-template-columns:58px 1fr; gap:16px; padding:16px 18px; background:var(--surface); border-bottom:1px solid var(--rule-soft)}
+.mile:last-child{border-bottom:0}
+.mile .id{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  border-right:1px solid var(--rule-soft); padding-right:12px;
+}
+.mile h4{font-family:var(--display); font-size:15px; font-weight:600; margin:0 0 5px; line-height:1.3}
+.mile p{font-size:14.5px; line-height:1.5; margin:0 0 8px; color:var(--muted)}
+.mile .out{font-family:var(--mono); font-size:11px; color:var(--second); letter-spacing:.02em; line-height:1.6}
+.mile.gate-row{background:var(--accent-soft)}
+.mile.gate-row .id{color:var(--accent)}
+
+/* ---- decisions ---- */
+.q{border-left:2px solid var(--accent); padding:2px 0 2px 18px; margin:0 0 24px}
+.q h4{font-family:var(--display); font-size:15.5px; font-weight:600; margin:0 0 7px}
+.q p{margin:0 0 8px; font-size:15.5px}
+.q .rec{font-family:var(--mono); font-size:11.5px; color:var(--second); letter-spacing:.02em}
+
+footer{
+  margin-top:80px; border-top:1px solid var(--rule); padding-top:16px;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px;
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="shell">
+  <nav class="rail" aria-label="Sheet index">
+    <h6>Sheet index</h6>
+    <ol>
+      <li><a href="#thesis"><span>00</span>Thesis</a></li>
+      <li><a href="#land"><span>01</span>Lay of the land</a></li>
+      <li><a href="#refs"><span>02</span>Reference board</a></li>
+      <li><a href="#arch"><span>03</span>Architecture</a></li>
+      <li><a href="#contract"><span>04</span>Tagging contract</a></li>
+      <li><a href="#presets"><span>05</span>Verticals</a></li>
+      <li><a href="#plan"><span>06</span>Execution plan</a></li>
+      <li><a href="#decide"><span>07</span>Open decisions</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="stamp">
+        <b>Turtle Game Works</b><i class="dot"></i>
+        <span>WalkthroughVisualizer</span><i class="dot"></i>
+        <span>Rev A &middot; 24 Aug 2026</span><i class="dot"></i>
+        <span class="gate">Awaiting reference approval</span>
+      </div>
+      <h1>Tag the art.<br>The <em>experience</em><br>builds itself.</h1>
+      <p class="lede">One WebGL runtime that reads a correctly tagged 3D scene and produces a finished walkthrough — navigation, UI, data panels, guided tours, wayfinding — with no bespoke code per project.</p>
+      <p class="lede">An apartment tower, a hospital wing, a mall, a plant. Same engine, same pipeline, different tags.</p>
+    </header>
+
+    <section id="thesis">
+      <div class="shead"><span class="code">00</span><h2>What we are actually building</h2></div>
+      <p>Not a walkthrough. A <strong>walkthrough factory</strong>. The value is in the contract between the art department and the runtime: an artist tags a node <code>wv.type=POI</code> with a label and a body of copy, and the runtime — without being told this project exists — spawns a hotspot, adds it to the room directory, wires it into the minimap, makes it linkable by URL, and logs a view event.</p>
+      <p>Three properties decide whether this succeeds:</p>
+      <ul>
+        <li><strong>The tag schema is the product.</strong> If it is expressive enough for a hospital and simple enough for an interior artist, everything downstream is easy. If it is wrong, every project needs code again.</li>
+        <li><strong>Authoring must be enforced, not documented.</strong> A Blender/Max add-on that writes tags plus a validator that fails a build loudly beats a PDF nobody reads.</li>
+        <li><strong>The runtime must be boring and fast.</strong> Baked lighting, compressed assets, a hard frame budget on a mid-range Android. Nothing about the tech should be visible to a client walking their unbuilt lobby.</li>
+      </ul>
+    </section>
+
+    <section id="land">
+      <div class="shead"><span class="code">01</span><h2>Lay of the land</h2></div>
+      <p>Every adjacent product solves one slice and locks you into it. Nothing occupies the position we want: <em>authored CG quality, on the open web, driven by data you own</em>.</p>
+      <div class="wrap-x">
+        <table>
+          <thead><tr><th>Approach</th><th>Strength</th><th>Where it fails us</th></tr></thead>
+          <tbody>
+            <tr><td>Matterport / Polycam<br>(scan-based)</td><td>Fast capture, familiar UX vocabulary</td><td>Requires a built space. Useless for unbuilt archviz. Closed data.</td></tr>
+            <tr><td>UE5 pixel streaming</td><td>Unbeatable fidelity</td><td>GPU cost per concurrent viewer, cold-start latency, no true mobile reach.</td></tr>
+            <tr><td>Concept3D / Mappedin</td><td>Mature wayfinding &amp; directory data model</td><td>Stylised maps, not an architectural experience. Per-venue licensing.</td></tr>
+            <tr><td>360&deg; panorama tours</td><td>Cheap, universal</td><td>Node-hopping, not walking. No free navigation, no measurement, no variants.</td></tr>
+            <tr><td class="us">WalkthroughVisualizer</td><td class="us">Real-time free navigation, baked CG quality, data-driven UI, runs on a static host</td><td>Needs a disciplined art pipeline — which is exactly the asset TGW already has.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The bet: <strong>three.js + glTF with metadata in <code>extras</code></strong>, baked lighting, WebGL2 as the floor and WebGPU as an opt-in ceiling. Standards-track, no vendor, no per-seat fee, embeddable in any client's website as an <code>&lt;iframe&gt;</code>.</p>
+    </section>
+
+    <section id="refs">
+      <div class="shead"><span class="code">02</span><h2>Reference board &mdash; approve these</h2></div>
+      <p>Grouped by what each one is for. I am not asking you to like them; I am asking you to confirm <strong>the thing we take from each</strong> is the right thing to take. Strike any you disagree with and I will re-source that slot.</p>
+
+      <p class="eyebrow">A &mdash; Experience benchmarks</p>
+      <div class="refgrid">
+        <div class="ref">
+          <span class="n">A1</span>
+          <p class="t"><a href="https://threejs-archviz.vercel.app/" target="_blank" rel="noopener">Three.js Architectural Visualization &mdash; Neotix</a></p>
+          <p class="take"><b>Take:</b> the closest direct analogue in our exact stack. Our quality floor and a sanity check on load time and material fidelity.</p>
+          <p class="url">threejs-archviz.vercel.app</p>
+        </div>
+        <div class="ref">
+          <span class="n">A2</span>
+          <p class="t"><a href="https://matterport.com/blog/best-virtual-tour-software-for-real-estate" target="_blank" rel="noopener">Matterport &mdash; view-mode vocabulary</a></p>
+          <p class="take"><b>Take:</b> the triad users already understand &mdash; <b>walk / dollhouse / floor plan</b> &mdash; plus tag-pin interaction. Adopt the mental model, reject the scan dependency.</p>
+          <p class="url">matterport.com</p>
+        </div>
+        <div class="ref">
+          <span class="n">A3</span>
+          <p class="t"><a href="https://manu.ninja/25-real-world-applications-using-webgl/" target="_blank" rel="noopener">25+ Real-World WebGL Applications</a></p>
+          <p class="take"><b>Take:</b> breadth scan of production WebGL UX &mdash; loading choreography, quality tiers, and how shipped products handle the first ten seconds.</p>
+          <p class="url">manu.ninja</p>
+        </div>
+        <div class="ref">
+          <span class="n">A4</span>
+          <p class="t"><a href="https://poly.cam/blog/best-matterport-alternatives-for-small-teams-creators-in-2026" target="_blank" rel="noopener">Matterport alternatives, 2026 roundup</a></p>
+          <p class="take"><b>Take:</b> current competitive pricing and feature floor &mdash; what a client will expect as table stakes before we say anything.</p>
+          <p class="url">poly.cam</p>
+        </div>
+      </div>
+
+      <p class="eyebrow">B &mdash; Technical foundations</p>
+      <div class="refgrid">
+        <div class="ref">
+          <span class="n">B1</span>
+          <p class="t"><a href="https://github.com/KhronosGroup/glTF/issues/1387" target="_blank" rel="noopener">glTF #1387 &mdash; <code>node.extras</code> as entity component data</a></p>
+          <p class="take"><b>Take:</b> the canonical discussion validating our tagging approach, including its known limits. This is the argument we are betting the schema on.</p>
+          <p class="url">github.com/KhronosGroup/glTF/issues/1387</p>
+        </div>
+        <div class="ref">
+          <span class="n">B2</span>
+          <p class="t"><a href="https://github.com/CesiumGS/glTF/tree/proposal-EXT_structural_metadata" target="_blank" rel="noopener">EXT_structural_metadata</a></p>
+          <p class="take"><b>Take:</b> the standards-track escape hatch for per-face / per-feature metadata at scale &mdash; the path if a hospital needs 40,000 tagged elements rather than 400.</p>
+          <p class="url">github.com/CesiumGS/glTF</p>
+        </div>
+        <div class="ref">
+          <span class="n">B3</span>
+          <p class="t"><a href="https://appscale.blog/en/blog/threejs-production-3d-web-2026-webgpu-realtime-standards" target="_blank" rel="noopener">Three.js in Production 2026 &mdash; WebGPU &amp; fallback</a></p>
+          <p class="take"><b>Take:</b> the current WebGPU-with-WebGL2-fallback pattern, so we build the renderer abstraction once and correctly.</p>
+          <p class="url">appscale.blog</p>
+        </div>
+        <div class="ref">
+          <span class="n">B4</span>
+          <p class="t"><a href="https://www.utsubo.com/blog/threejs-best-practices-100-tips" target="_blank" rel="noopener">100 Three.js performance practices (2026)</a></p>
+          <p class="take"><b>Take:</b> the checklist we turn into an automated perf-budget test, not a thing we read once. Draw calls, instancing, texture memory.</p>
+          <p class="url">utsubo.com</p>
+        </div>
+        <div class="ref">
+          <span class="n">B5</span>
+          <p class="t"><a href="https://threejs.org/docs/pages/GLTFLoader.html" target="_blank" rel="noopener">three.js GLTFLoader</a></p>
+          <p class="take"><b>Take:</b> exact <code>extras</code> propagation behaviour, plus Draco / meshopt / KTX2 decoder wiring &mdash; the seam our whole loader sits on.</p>
+          <p class="url">threejs.org/docs</p>
+        </div>
+        <div class="ref">
+          <span class="n">B6</span>
+          <p class="t"><a href="https://discourse.threejs.org/t/webgpurenderer-compressed-texture-ktx2-basis/69362" target="_blank" rel="noopener">WebGPURenderer + KTX2/Basis</a></p>
+          <p class="take"><b>Take:</b> live gotchas on compressed textures under the WebGPU path &mdash; the specific place a dual-renderer build tends to break.</p>
+          <p class="url">discourse.threejs.org</p>
+        </div>
+      </div>
+
+      <p class="eyebrow">C &mdash; Vertical references (hospital &amp; facility)</p>
+      <div class="refgrid">
+        <div class="ref">
+          <span class="n">C1</span>
+          <p class="t"><a href="https://www.mappedin.com/industries/hospitals-healthcare/" target="_blank" rel="noopener">Mappedin &mdash; hospital maps &amp; wayfinding</a></p>
+          <p class="take"><b>Take:</b> the indoor routing data model &mdash; nodes, connections, levels, accessibility flags. We mirror its shape in our nav graph so hospital work is config, not code.</p>
+          <p class="url">mappedin.com</p>
+        </div>
+        <div class="ref">
+          <span class="n">C2</span>
+          <p class="t"><a href="https://concept3d.com/blog/digital-wayfinding/interactive-hospital-maps-meeting-the-wayfinding-visitor-needs-at-health-centers/" target="_blank" rel="noopener">Concept3D &mdash; interactive hospital maps</a></p>
+          <p class="take"><b>Take:</b> what visitors actually search for (department, doctor, entrance, parking) &mdash; this defines the hospital preset's directory schema.</p>
+          <p class="url">concept3d.com</p>
+        </div>
+        <div class="ref">
+          <span class="n">C3</span>
+          <p class="t"><a href="https://www.hfmmagazine.com/articles/4052-digital-wayfinding-options-expand-for-health-facilities" target="_blank" rel="noopener">HFM &mdash; digital wayfinding in health facilities</a></p>
+          <p class="take"><b>Take:</b> buyer-side language and procurement criteria for hospital administrators &mdash; feeds the pitch, and tells us which features are actually purchased.</p>
+          <p class="url">hfmmagazine.com</p>
+        </div>
+        <div class="ref">
+          <span class="n">C4</span>
+          <p class="t"><a href="https://www.virtuance.com/blog/best-virtual-tour-platforms-commercial-real-estate/" target="_blank" rel="noopener">CRE virtual tour platforms, 2026</a></p>
+          <p class="take"><b>Take:</b> commercial real-estate expectations &mdash; area schedules, unit availability, lease overlays. The archviz preset's data panel comes from here.</p>
+          <p class="url">virtuance.com</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="arch">
+      <div class="shead"><span class="code">03</span><h2>Architecture &mdash; five layers</h2></div>
+      <p>Each layer talks to the next through a file format, never a function call. That is what makes the art side and the runtime side independently replaceable.</p>
+      <figure>
+        <svg class="diagram" viewBox="0 0 720 400" role="img" aria-label="Five-layer architecture: authoring, pipeline, core runtime, UI, delivery">
+          <defs>
+            <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+              <path d="M0,1 L7,4.5 L0,8 Z" fill="var(--accent)"/>
+            </marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="9.5" fill="var(--muted)" letter-spacing="1.2">
+            <text x="28" y="34">L1</text><text x="28" y="106">L2</text><text x="28" y="178">L3</text>
+            <text x="28" y="250">L4</text><text x="28" y="322">L5</text>
+          </g>
+          <g>
+            <rect x="60" y="16" width="560" height="52" fill="var(--surface-2)" stroke="var(--rule)" rx="2"/>
+            <rect x="60" y="88" width="560" height="52" fill="var(--surface-2)" stroke="var(--rule)" rx="2"/>
+            <rect x="60" y="160" width="560" height="52" fill="var(--second-soft)" stroke="var(--second)" rx="2"/>
+            <rect x="60" y="232" width="560" height="52" fill="var(--surface-2)" stroke="var(--rule)" rx="2"/>
+            <rect x="60" y="304" width="560" height="52" fill="var(--surface-2)" stroke="var(--rule)" rx="2"/>
+          </g>
+          <g font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="var(--ink)">
+            <text x="78" y="38">Authoring &amp; tagging</text>
+            <text x="78" y="110">Offline pipeline &mdash; wv-cli</text>
+            <text x="78" y="182">Runtime core &mdash; @wv/core</text>
+            <text x="78" y="254">Data-driven UI &amp; presets</text>
+            <text x="78" y="326">Delivery &amp; embed</text>
+          </g>
+          <g font-family="Archivo, sans-serif" font-size="11" fill="var(--muted)">
+            <text x="78" y="56">Blender / Max add-on &middot; naming convention &middot; validator</text>
+            <text x="78" y="128">meshopt + KTX2 &middot; LODs &middot; navmesh bake &middot; portal graph &middot; manifest</text>
+            <text x="78" y="200">entity registry &middot; movement modes &middot; interaction &middot; variants &middot; levels</text>
+            <text x="78" y="272">panels from JSON &middot; archviz preset &middot; hospital preset &middot; theming</text>
+            <text x="78" y="344">static build &middot; iframe + JS SDK &middot; analytics &middot; kiosk / VR</text>
+          </g>
+          <g stroke="var(--accent)" stroke-width="1.4" marker-end="url(#ar)" fill="none">
+            <path d="M340,68 L340,82"/><path d="M340,140 L340,154"/>
+            <path d="M340,212 L340,226"/><path d="M340,284 L340,298"/>
+          </g>
+          <g font-family="IBM Plex Mono, monospace" font-size="8.5" fill="var(--accent)" letter-spacing=".6">
+            <text x="350" y="80">tagged .glb</text>
+            <text x="350" y="152">scene.glb + project.json + nav.bin</text>
+            <text x="350" y="224">typed entity events</text>
+            <text x="350" y="296">panel schema</text>
+          </g>
+        </svg>
+        <figcaption>Layer boundaries are file formats. Swap the renderer or the DCC tool without touching the others.</figcaption>
+      </figure>
+      <h3>Runtime systems in L3</h3>
+      <ul>
+        <li><strong>Movement:</strong> first-person walk (capsule + gravity, clamped to navmesh), orbit/dollhouse, click-to-teleport, guided spline tour, top-down plan.</li>
+        <li><strong>Spatial:</strong> level/floor manager, portal culling from the baked graph, A&rarr;B pathfinding on the nav graph (this is what makes hospital wayfinding free).</li>
+        <li><strong>Presentation:</strong> baked lightmaps + probes, sun study, material variant sets, measurement, annotations, screenshot, URL-state bookmarking.</li>
+      </ul>
+    </section>
+
+    <section id="contract">
+      <div class="shead"><span class="code">04</span><h2>The tagging contract</h2></div>
+      <p>Everything hangs on this. Tags live in glTF <code>node.extras</code> under a <code>wv</code> namespace, authored by the add-on and checked by the validator. Draft shape:</p>
+<pre><span class="c">// node.extras on a reception desk mesh</span>
+{
+  <span class="k">"wv"</span>: {
+    <span class="k">"type"</span>: <span class="s">"POI"</span>,
+    <span class="k">"id"</span>: <span class="s">"lobby.reception"</span>,
+    <span class="k">"label"</span>: <span class="s">"Reception"</span>,
+    <span class="k">"level"</span>: <span class="s">"L00"</span>,
+    <span class="k">"zone"</span>: <span class="s">"lobby"</span>,
+    <span class="k">"tags"</span>: [<span class="s">"public"</span>, <span class="s">"staffed"</span>],
+    <span class="k">"panel"</span>: {
+      <span class="k">"body"</span>: <span class="s">"Visitor check-in, 24h."</span>,
+      <span class="k">"media"</span>: [<span class="s">"img/reception-01.jpg"</span>]
+    },
+    <span class="k">"anchor"</span>: { <span class="k">"offset"</span>: [0, 1.2, 0] }
+  }
+}</pre>
+      <p class="eyebrow">Node types the runtime recognises</p>
+      <div class="wrap-x">
+        <table>
+          <thead><tr><th>Type</th><th>Authored as</th><th>Runtime builds</th></tr></thead>
+          <tbody>
+            <tr><td><code>NAV_FLOOR</code></td><td>Flat walkable mesh, invisible</td><td>Navmesh + walk clamp + teleport targets</td></tr>
+            <tr><td><code>NAV_BLOCK</code></td><td>Simple collision volume</td><td>Carved holes in the navmesh</td></tr>
+            <tr><td><code>PORTAL</code></td><td>Quad in a doorway</td><td>Visibility graph, room-to-room culling</td></tr>
+            <tr><td><code>ZONE</code></td><td>Box volume + label</td><td>Room directory entry, minimap region, "you are in"</td></tr>
+            <tr><td><code>POI</code></td><td>Empty or mesh + copy</td><td>Hotspot pin, info panel, deep link, analytics event</td></tr>
+            <tr><td><code>VARIANT_SET</code></td><td>Sibling meshes/materials</td><td>Finish switcher in the UI</td></tr>
+            <tr><td><code>CAM_TOUR</code></td><td>Ordered camera empties</td><td>Guided tour player with chapters</td></tr>
+            <tr><td><code>DEST</code></td><td>Empty + directory data</td><td>Wayfinding search target and route endpoint</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Anything untagged renders as plain geometry &mdash; so a scene degrades gracefully instead of erroring, and an artist can tag incrementally.</p>
+    </section>
+
+    <section id="presets">
+      <div class="shead"><span class="code">05</span><h2>Verticals are config, not forks</h2></div>
+      <p>A preset is a JSON file that turns systems on, orders UI panels, and sets copy. Adding "mall" or "plant" later must never mean a new codebase.</p>
+      <div class="split">
+        <div class="pane">
+          <h4>Archviz preset</h4>
+          <p class="sub">Sell an unbuilt space</p>
+          <ul>
+            <li>Walk / dollhouse / floor plan triad</li>
+            <li>Finish &amp; furniture variant switcher</li>
+            <li>Sun study with time-of-day scrub</li>
+            <li>Area &amp; dimension measurement</li>
+            <li>Unit schedule and availability overlay</li>
+            <li>Shareable bookmarked viewpoints</li>
+          </ul>
+        </div>
+        <div class="pane">
+          <h4>Hospital preset</h4>
+          <p class="sub">Orient a stranger under stress</p>
+          <ul>
+            <li>Search a department, doctor, or entrance</li>
+            <li>A&rarr;B route drawn on the floor, level-aware</li>
+            <li>Step-by-step directions with landmarks</li>
+            <li>Accessible-route toggle</li>
+            <li>Department directory and colour legend</li>
+            <li>Kiosk mode with idle reset</li>
+          </ul>
+        </div>
+      </div>
+      <p>Both read the same <code>scene.glb</code>. The difference is which tag types the preset cares about.</p>
+    </section>
+
+    <section id="plan">
+      <div class="shead"><span class="code">06</span><h2>Execution plan</h2></div>
+      <p>Sequenced so that a demonstrable, client-showable thing exists early and never regresses. Nothing starts until sheet 02 and 07 are signed off.</p>
+      <div class="miles">
+        <div class="mile gate-row">
+          <div class="id">M0</div>
+          <div>
+            <h4>Approve references &amp; freeze scope</h4>
+            <p>You strike or confirm the reference board, answer the seven open decisions, and we lock the tag schema v0.1 before a line of runtime code exists.</p>
+            <p class="out">out: signed reference board &middot; schema-v0.1.md &middot; repo scaffold</p>
+          </div>
+        </div>
+        <div class="mile">
+          <div class="id">M1</div>
+          <div>
+            <h4>Vertical slice</h4>
+            <p>One hand-tagged GLB of a small apartment I model here, loaded by a bare runtime: walk, look, collide, click a POI, see a panel. Ugly UI, correct architecture.</p>
+            <p class="out">out: demo-apartment.glb &middot; @wv/core walk + interaction &middot; live build</p>
+          </div>
+        </div>
+        <div class="mile">
+          <div class="id">M2</div>
+          <div>
+            <h4>Pipeline &mdash; wv-cli</h4>
+            <p>Tagged GLB in, optimised bundle out: meshopt/Draco, KTX2 textures, LODs, navmesh bake, portal graph, <code>project.json</code> emission, validator with hard failures.</p>
+            <p class="out">out: wv-cli &middot; navmesh baker &middot; schema validator &middot; perf budget test</p>
+          </div>
+        </div>
+        <div class="mile">
+          <div class="id">M3</div>
+          <div>
+            <h4>UI system &amp; view modes</h4>
+            <p>Panels rendered from JSON. Walk / dollhouse / plan triad, minimap, room directory, tour player, variants, measurement, URL state, theming tokens.</p>
+            <p class="out">out: @wv/ui &middot; preset loader &middot; client theming</p>
+          </div>
+        </div>
+        <div class="mile">
+          <div class="id">M4</div>
+          <div>
+            <h4>Authoring add-on</h4>
+            <p>Blender panel to tag, validate, and export without touching JSON. This is what makes the system usable by an artist who is not you.</p>
+            <p class="out">out: wv-blender add-on &middot; naming-convention fallback &middot; artist guide</p>
+          </div>
+        </div>
+        <div class="mile">
+          <div class="id">M5</div>
+          <div>
+            <h4>Two verticals, finished</h4>
+            <p>Archviz preset complete on a full apartment. Hospital preset complete on a modelled hospital wing, including search and routing. Both are the sales demos.</p>
+            <p class="out">out: 2 preset configs &middot; 2 demo scenes &middot; 2 public demo URLs</p>
+          </div>
+        </div>
+        <div class="mile">
+          <div class="id">M6</div>
+          <div>
+            <h4>Production hardening</h4>
+            <p>Mobile and mid-range Android budgets, loading choreography, WebGPU opt-in path, VR mode, analytics events, embed SDK, docs, and a project-templating command.</p>
+            <p class="out">out: embed SDK &middot; analytics &middot; docs site &middot; <code>wv new &lt;project&gt;</code></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="decide">
+      <div class="shead"><span class="code">07</span><h2>Open decisions &mdash; I need seven answers</h2></div>
+      <p>These change the architecture, not the polish. My recommendation is noted on each; override freely.</p>
+
+      <div class="q">
+        <h4>1. Who authors the art?</h4>
+        <p>If it is only you and TGW artists, the tag schema can be terse and the add-on thin. If clients or outsourced studios deliver scenes, the validator and naming-convention fallback become first-class work.</p>
+        <p class="rec">rec: assume external artists &mdash; build the validator early, it is cheap now and brutal later</p>
+      </div>
+      <div class="q">
+        <h4>2. Lighting: baked or real-time?</h4>
+        <p>Baked lightmaps out of Blender Cycles give UE-adjacent quality at mobile frame rates but freeze the time of day per bake. Real-time keeps sun study fully dynamic and costs fidelity.</p>
+        <p class="rec">rec: baked as the default, with 2&ndash;3 baked time-of-day sets and a real-time toggle for the sun-study panel</p>
+      </div>
+      <div class="q">
+        <h4>3. What is the target device floor?</h4>
+        <p>This sets every budget in the project. A mid-range Android at 30fps is a very different scene than a desktop at 60.</p>
+        <p class="rec">rec: mid-range Android 30fps / desktop 60fps, enforced by an automated perf test from M2 onward</p>
+      </div>
+      <div class="q">
+        <h4>4. Do we own the DCC, or accept anything?</h4>
+        <p>Blender-first lets me ship an add-on immediately. 3ds Max is where most Indian archviz studios actually work, and would need a second exporter.</p>
+        <p class="rec">rec: Blender add-on first, plus a naming-convention path so any DCC that exports glTF still works</p>
+      </div>
+      <div class="q">
+        <h4>5. Runtime stack &mdash; plain three.js or React Three Fiber?</h4>
+        <p>Plain three.js keeps the core framework-agnostic and embeddable anywhere. R3F speeds UI work but couples the engine to React.</p>
+        <p class="rec">rec: plain three.js core, React only in the UI layer, talking over an event bus</p>
+      </div>
+      <div class="q">
+        <h4>6. Where does content live?</h4>
+        <p>Fully static (S3/Cloudflare, one folder per project) is simplest and cheapest. A small backend unlocks per-client dashboards, gated links, and analytics.</p>
+        <p class="rec">rec: static for M1&ndash;M5; design <code>project.json</code> so a backend can serve it later without a runtime change</p>
+      </div>
+      <div class="q">
+        <h4>7. What is the first real scene I model?</h4>
+        <p>I will build the demo models here. A 2BHK apartment is the fastest path to a showable archviz demo; a hospital wing proves the harder wayfinding case earlier.</p>
+        <p class="rec">rec: 2BHK apartment for M1, hospital wing at M5 &mdash; unless you have a live client scene worth targeting</p>
+      </div>
+    </section>
+
+    <footer>
+      <span>WalkthroughVisualizer &middot; Rev A</span>
+      <span>Blocked on sheets 02 &amp; 07</span>
+    </footer>
+  </main>
+</div>
