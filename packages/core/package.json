@@ -8,7 +8,10 @@
     "./registry": "./src/registry.js",
     "./player": "./src/player.js",
     "./collision": "./src/collision.js",
-    "./pois": "./src/pois.js"
+    "./pois": "./src/pois.js",
+    "./viewmodes": "./src/viewmodes.js",
+    "./tour": "./src/tour.js",
+    "./touch": "./src/touch.js"
   },
   "peerDependencies": {
     "three": ">=0.160.0"

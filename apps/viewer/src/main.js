@@ -1,20 +1,22 @@
-import { WalkthroughViewer, TIME_OF_DAY } from '@wv/core';
+import { WalkthroughViewer, TIME_OF_DAY, VIEW_MODES, isTouchDevice } from '@wv/core';
 
 /**
- * M1 viewer shell. Every panel below is driven off registry events, not off any
- * knowledge of this particular building — swap the .glb and the same shell
- * populates itself. The JSON-declared panel system replaces this by hand-wiring
- * in M3; the event contract it consumes is already the final one.
+ * Viewer shell.
+ *
+ * Every panel is driven off registry events, not off knowledge of this
+ * particular building — swap the .glb and the same shell populates itself. The
+ * JSON-declared panel system replaces this hand-wiring in M3; the event contract
+ * it consumes is already the final one.
  */
 
 const $ = (id) => document.getElementById(id);
 const SCENE_URL = './content/kp-tower/scene.glb';
+const TOUCH = isTouchDevice();
 
 // Device-floor budget: mid-range Android at 30fps, from the locked decision.
 // Draw calls are the binding constraint on that class of GPU long before
-// triangles are; 150 is what an Adreno 6xx / Mali-G57 holds comfortably. The
-// M2 pipeline's material merging is what buys headroom below this.
-const BUDGET = { drawCalls: 150, triangles: 180000, fps: 30 };
+// triangles are; 150 is what an Adreno 6xx / Mali-G57 holds comfortably.
+const BUDGET = { drawCalls: 150, triangles: 180000 };
 
 const CATEGORY_COLOR = {
   living: '#E8563C', bedroom: '#6FB0AC', kitchen: '#E0B453', bath: '#8FA8C4',
@@ -22,10 +24,18 @@ const CATEGORY_COLOR = {
 };
 
 const stage = $('stage');
-const viewer = new WalkthroughViewer(stage, { startLevel: 'L01', timeOfDay: 'noon' });
+const viewer = new WalkthroughViewer(stage, {
+  startLevel: 'L01',
+  timeOfDay: 'noon',
+  stickEl: $('stick'),
+  // A phone renders the same scene into far fewer pixels; capping the ratio is
+  // the cheapest thing that keeps a mid-range Android at 30fps.
+  maxPixelRatio: TOUCH ? 1.6 : 2,
+});
 
 let ready = false;
-let activePoi = null;
+document.body.classList.toggle('touch', TOUCH);
+document.body.classList.add('mode-walk');
 
 // --------------------------------------------------------------------------- //
 // Loading
@@ -39,25 +49,68 @@ function setProgress(f, msg) {
 viewer.addEventListener('ready', (e) => {
   const d = e.detail;
   ready = true;
+  document.body.classList.remove('booting');
 
   if (d.project) {
     $('proj-name').textContent = d.project.label || 'Untitled project';
     $('load-title').textContent = (d.project.label || '').split('—')[0].trim() || 'Scene';
-    $('proj-sub').textContent = `${d.project.preset || 'generic'} preset · schema ${d.project.schema || '?'}`;
   }
 
+  buildViews();
   buildLevels(d.levels);
   buildTimeOfDay();
+  if (TOUCH) $('btn-tour').textContent = 'Tour';
+
+  $('start-hint').innerHTML = TOUCH
+    ? 'Drag the <b>left thumb</b> to walk, drag <b>anywhere else</b> to look, '
+      + '<b>tap</b> a marker to open it.'
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move, mouse to look, '
+      + '<kbd>Shift</kbd> to walk faster, <kbd>Esc</kbd> to release the cursor.';
 
   setProgress(1, 'Ready');
   $('loader').classList.add('hidden');
   $('start').classList.remove('hidden');
 
-  console.info('[wv] registry', {
-    zones: d.zones, pois: d.pois, portals: d.portals,
-    navBlocks: d.navBlocks, tours: d.tours.length,
-  });
   if (d.warnings.length) console.warn('[wv] validator warnings\n' + d.warnings.join('\n'));
+});
+
+// --------------------------------------------------------------------------- //
+// View modes
+// --------------------------------------------------------------------------- //
+
+function buildViews() {
+  const nav = $('views');
+  nav.innerHTML = '';
+  for (const [id, v] of Object.entries(VIEW_MODES)) {
+    const b = document.createElement('button');
+    b.innerHTML = `${v.label}${TOUCH ? '' : `<span class="k">${v.key}</span>`}`;
+    b.dataset.mode = id;
+    b.title = v.hint;
+    b.addEventListener('click', () => switchView(id));
+    nav.appendChild(b);
+  }
+}
+
+function switchView(mode) {
+  if (mode === viewer.viewMode) return;
+  viewer.setViewMode(mode);
+  closeDrawer('poi');
+  toast(mode === 'walk'
+    ? (TOUCH ? 'Walk mode — drag the left thumb to move' : 'Walk mode — click to take control')
+    : (TOUCH ? `${VIEW_MODES[mode].label} — drag to orbit, pinch to zoom`
+      : `${VIEW_MODES[mode].label} — drag to orbit, scroll to zoom`));
+}
+
+// The event fires for internal switches too — starting a tour drops to walk
+// mode, and toasting there would talk over the tour that just began. Only
+// switchView(), the user-initiated path, announces itself.
+viewer.addEventListener('viewmode', (e) => {
+  const { mode } = e.detail;
+  for (const b of $('views').querySelectorAll('button')) {
+    b.classList.toggle('on', b.dataset.mode === mode);
+  }
+  for (const m of Object.keys(VIEW_MODES)) document.body.classList.remove(`mode-${m}`);
+  document.body.classList.add(`mode-${mode}`);
 });
 
 // --------------------------------------------------------------------------- //
@@ -71,10 +124,15 @@ function buildLevels(levels) {
     const b = document.createElement('button');
     b.innerHTML = `<em>${lv.label}</em><span>${lv.id}</span>`;
     b.dataset.level = lv.id;
+    b.title = lv.label;
     b.addEventListener('click', () => {
-      viewer.setLevel(lv.id);
+      viewer.setLevel(lv.id, { teleport: viewer.viewMode === 'walk' });
+      // The plan view is per level, so changing level must reframe it.
+      if (viewer.viewMode === 'plan') {
+        viewer.setViewMode('walk', { animate: false });
+        viewer.setViewMode('plan');
+      }
       closeDrawer('poi');
-      toast(`Moved to ${lv.label}`);
     });
     nav.appendChild(b);
   });
@@ -94,6 +152,19 @@ viewer.addEventListener('level', (e) => {
 function buildTimeOfDay() {
   const box = $('tod');
   box.innerHTML = '';
+  // Three side-by-side chips do not fit next to the action buttons on a 390px
+  // screen, so touch gets one chip that cycles instead.
+  if (TOUCH) {
+    const b = document.createElement('button');
+    b.id = 'tod-cycle';
+    b.className = 'on';
+    // The viewer sets the time of day during load(), before this panel exists,
+    // so seed the label from current state rather than waiting for the event.
+    b.textContent = TIME_OF_DAY[viewer.timeOfDay]?.label ?? 'Midday';
+    b.addEventListener('click', cycleTimeOfDay);
+    box.appendChild(b);
+    return;
+  }
   for (const [key, p] of Object.entries(TIME_OF_DAY)) {
     const b = document.createElement('button');
     b.innerHTML = `${p.label}<span>${p.hour}</span>`;
@@ -104,13 +175,15 @@ function buildTimeOfDay() {
 }
 
 viewer.addEventListener('timeofday', (e) => {
+  const cycle = $('tod-cycle');
+  if (cycle) { cycle.textContent = e.detail.label; return; }
   for (const b of $('tod').querySelectorAll('button')) {
     b.classList.toggle('on', b.dataset.tod === e.detail.key);
   }
 });
 
 // --------------------------------------------------------------------------- //
-// Zone readout
+// Zone readout + stats
 // --------------------------------------------------------------------------- //
 
 viewer.addEventListener('zone', (e) => {
@@ -122,29 +195,25 @@ viewer.addEventListener('zone', (e) => {
   $('locus-meta').textContent = bits.join('  ·  ');
 });
 
-// --------------------------------------------------------------------------- //
-// Stats + budget
-// --------------------------------------------------------------------------- //
-
 viewer.addEventListener('stats', (e) => {
+  if ($('stats').classList.contains('hidden')) return;
   const s = e.detail;
   $('s-fps').textContent = s.fps.toFixed(0);
   $('s-calls').textContent = s.drawCalls;
-  $('s-tris').textContent = s.triangles > 9999
-    ? `${(s.triangles / 1000).toFixed(0)}k` : s.triangles;
-
+  $('s-tris').textContent = s.triangles > 9999 ? `${(s.triangles / 1000).toFixed(0)}k` : s.triangles;
   const over = s.drawCalls > BUDGET.drawCalls || s.triangles > BUDGET.triangles;
   const badge = $('s-budget');
-  badge.textContent = over ? 'over budget' : 'within budget';
+  badge.textContent = over ? 'over' : 'ok';
   badge.className = `badge ${over ? 'warn' : 'ok'}`;
 });
+
+$('btn-stats').addEventListener('click', () => $('stats').classList.toggle('hidden'));
 
 // --------------------------------------------------------------------------- //
 // POIs
 // --------------------------------------------------------------------------- //
 
 function openPoi(poi) {
-  activePoi = poi;
   $('poi-title').textContent = poi.label;
   $('poi-body').textContent = poi.panel?.body || '';
   const dl = $('poi-fields');
@@ -160,21 +229,21 @@ function openPoi(poi) {
   $('poi-zone').textContent = `${poi.id}  ·  ${zone ? zone.label : poi.level}`;
   $('poi').classList.remove('hidden');
   $('rooms').classList.add('hidden');
+  $('btn-rooms').classList.remove('on');
   history.replaceState(null, '', `?poi=${encodeURIComponent(poi.id)}`);
 }
 
 function closeDrawer(id) {
   $(id).classList.add('hidden');
-  if (id === 'poi') {
-    activePoi = null;
-    history.replaceState(null, '', location.pathname);
-  }
+  if (id === 'poi') history.replaceState(null, '', location.pathname);
   if (id === 'rooms') $('btn-rooms').classList.remove('on');
 }
 
 for (const b of document.querySelectorAll('[data-close]')) {
   b.addEventListener('click', () => closeDrawer(b.dataset.close));
 }
+
+viewer.addEventListener('poiTap', (e) => openPoi(e.detail.poi));
 
 // --------------------------------------------------------------------------- //
 // Room directory
@@ -184,7 +253,6 @@ function buildRooms() {
   const list = $('rooms-list');
   list.innerHTML = '';
   const level = viewer.currentLevel;
-
   const units = viewer.reg.zones.filter((z) => z.category === 'unit' && z.level === level);
   const commons = viewer.reg.zones.filter(
     (z) => z.level === level && z.category !== 'unit' && !z.parent,
@@ -202,6 +270,7 @@ function buildRooms() {
       b.innerHTML = `<span><em style="background:${dot}"></em>${z.label}</span>`
         + `<i>${z.area ? z.area + ' sq m' : (z.category || '')}</i>`;
       b.addEventListener('click', () => {
+        if (viewer.viewMode !== 'walk') viewer.setViewMode('walk');
         const c = z.box.getCenter(new (viewer.camera.position.constructor)());
         const lv = viewer.reg.levelById.get(z.level);
         viewer.player.teleport(c.x, (lv?.elevation ?? 0) + 0.2, c.z);
@@ -230,82 +299,146 @@ $('btn-rooms').addEventListener('click', () => {
 });
 
 // --------------------------------------------------------------------------- //
-// Tour
+// Guided tour
 // --------------------------------------------------------------------------- //
 
-function firstTourOnLevel() {
-  return viewer.reg.tours.find((t) => t.level === viewer.currentLevel) || viewer.reg.tours[0];
+let tourStops = [];
+
+function renderChapters(state) {
+  if (tourStops.join('|') !== state.stops.join('|')) {
+    tourStops = state.stops;
+    const box = $('tour-chapters');
+    box.innerHTML = '';
+    state.stops.forEach((label, i) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.dataset.stop = String(i);
+      b.addEventListener('click', () => viewer.tourGoToStop(i));
+      box.appendChild(b);
+    });
+    const ticks = $('tour-ticks');
+    ticks.innerHTML = '';
+    state.stops.forEach((_, i) => {
+      const t = document.createElement('i');
+      t.style.left = `${(i / Math.max(1, state.stops.length - 1)) * 100}%`;
+      ticks.appendChild(t);
+    });
+  }
+
+  const buttons = $('tour-chapters').querySelectorAll('button');
+  buttons.forEach((b, i) => {
+    const on = i === state.stopIndex;
+    b.classList.toggle('on', on);
+    if (on) b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  });
+  $('tour-ticks').querySelectorAll('i').forEach((t, i) => {
+    t.classList.toggle('done', i <= state.stopIndex);
+  });
 }
-
-$('btn-tour').addEventListener('click', () => {
-  if (viewer.tour) { viewer.stopTour(); return; }
-  const t = firstTourOnLevel();
-  if (t) viewer.startTour(t.id);
-  else toast('No guided tour on this level');
-});
-
-$('tour-exit').addEventListener('click', () => viewer.stopTour());
 
 viewer.addEventListener('tour', (e) => {
   const d = e.detail;
-  if (d.state === 'start') {
-    $('tour-bar').classList.remove('hidden');
-    $('btn-tour').classList.add('on');
-    $('tour-stop').textContent = d.label;
-    document.body.classList.remove('aiming');
-  } else if (d.state === 'stop') {
-    $('tour-bar').classList.add('hidden');
+  if (d.state === 'stop') {
+    $('tour').classList.add('hidden');
     $('btn-tour').classList.remove('on');
-  } else if (d.state === 'stop-reached' && d.label) {
-    $('tour-stop').textContent = d.label;
+    document.body.classList.remove('touring');
+    return;
   }
+  if (d.state === 'end') {
+    toast('Tour complete');
+    return;
+  }
+  $('tour').classList.remove('hidden');
+  $('btn-tour').classList.add('on');
+  document.body.classList.add('touring');
+  $('tour-stop').textContent = d.stopLabel;
+  $('tour-count').textContent = `${d.stopIndex + 1} / ${d.stops.length}`;
+  $('tour-fill').style.width = `${(d.progress * 100).toFixed(1)}%`;
+  $('tour-track').setAttribute('aria-valuenow', Math.round(d.progress * 100));
+  $('tour-play').classList.toggle('playing', !d.paused);
+  $('tour-play').title = d.paused ? 'Play' : 'Pause';
+  renderChapters(d);
+});
+
+$('btn-tour').addEventListener('click', () => {
+  if (viewer.tourPlayer) viewer.stopTour();
+  else viewer.startTour();
+});
+$('tour-start-btn').addEventListener('click', () => {
+  $('start').classList.add('hidden');
+  viewer.startTour();
+});
+$('tour-exit').addEventListener('click', () => viewer.stopTour());
+$('tour-prev').addEventListener('click', () => viewer.tourPrev());
+$('tour-next').addEventListener('click', () => viewer.tourNext());
+$('tour-play').addEventListener('click', () => viewer.pauseTour());
+
+// Scrubbing: pointer events on the track, so it works with mouse and finger.
+const track = $('tour-track');
+let scrubbing = false;
+const scrubTo = (clientX) => {
+  const r = track.getBoundingClientRect();
+  viewer.tourSeek((clientX - r.left) / r.width);
+};
+track.addEventListener('pointerdown', (e) => {
+  if (!viewer.tourPlayer) return;
+  scrubbing = true;
+  track.setPointerCapture(e.pointerId);
+  scrubTo(e.clientX);
+});
+track.addEventListener('pointermove', (e) => { if (scrubbing) scrubTo(e.clientX); });
+track.addEventListener('pointerup', () => { scrubbing = false; });
+track.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') viewer.tourNext();
+  if (e.key === 'ArrowLeft') viewer.tourPrev();
 });
 
 // --------------------------------------------------------------------------- //
-// Pointer lock, hover, clicks
+// Pointer lock, hover, clicks (desktop)
 // --------------------------------------------------------------------------- //
 
 $('start-btn').addEventListener('click', () => {
   $('start').classList.add('hidden');
-  viewer.player.requestLock();
+  if (!TOUCH) viewer.player.requestLock();
 });
-
 $('start').addEventListener('click', (e) => {
-  if (e.target === $('start')) { $('start').classList.add('hidden'); viewer.player.requestLock(); }
+  if (e.target === $('start')) {
+    $('start').classList.add('hidden');
+    if (!TOUCH) viewer.player.requestLock();
+  }
 });
 
 viewer.addEventListener('lock', (e) => {
-  if (!e.detail.locked && ready && !viewer.tour) {
+  if (!e.detail.locked && ready && !viewer.tourPlayer) {
     document.body.classList.remove('aiming');
     $('hover-label').classList.add('hidden');
   }
 });
 
-stage.addEventListener('click', () => {
-  if (!ready) return;
-  if (viewer.tour) return;
-  if (!viewer.player.locked) { viewer.player.requestLock(); return; }
-  const poi = viewer.pois.hovered;
-  if (poi) {
-    viewer.player.releaseLock();
-    openPoi(poi);
-  }
-});
+if (!TOUCH) {
+  stage.addEventListener('click', () => {
+    if (!ready || viewer.tourPlayer || viewer.viewMode !== 'walk') return;
+    if (!viewer.player.locked) { viewer.player.requestLock(); return; }
+    const poi = viewer.pois.hovered;
+    if (poi) { viewer.player.releaseLock(); openPoi(poi); }
+  });
 
-// Hover feedback outside pointer lock, so the demo also works with a trackpad.
-stage.addEventListener('mousemove', (ev) => {
-  if (!ready || viewer.player.locked || viewer.tour) return;
-  const poi = viewer.pickAt(ev.clientX, ev.clientY);
-  viewer.pois.setHovered(poi);
-  stage.style.cursor = poi ? 'pointer' : 'default';
-  updateHover(poi);
-});
+  stage.addEventListener('mousemove', (ev) => {
+    if (!ready || viewer.tourPlayer) return;
+    if (viewer.viewMode === 'walk' && viewer.player.locked) return;
+    const poi = viewer.pickAt(ev.clientX, ev.clientY);
+    viewer.pois.setHovered(poi);
+    stage.style.cursor = poi ? 'pointer' : (viewer.viewMode === 'walk' ? 'default' : 'grab');
+    updateHover(poi);
+  });
 
-stage.addEventListener('mousedown', (ev) => {
-  if (!ready || viewer.player.locked || viewer.tour) return;
-  const poi = viewer.pickAt(ev.clientX, ev.clientY);
-  if (poi) openPoi(poi);
-});
+  stage.addEventListener('mousedown', (ev) => {
+    if (!ready || viewer.tourPlayer) return;
+    if (viewer.viewMode === 'walk' && viewer.player.locked) return;
+    const poi = viewer.pickAt(ev.clientX, ev.clientY);
+    if (poi) openPoi(poi);
+  });
+}
 
 function updateHover(poi) {
   const el = $('hover-label');
@@ -316,26 +449,40 @@ function updateHover(poi) {
 
 let lastHover = null;
 setInterval(() => {
-  if (!ready || viewer.tour) return;
-  if (viewer.player.locked && viewer.pois.hovered !== lastHover) {
+  if (!ready || viewer.tourPlayer || viewer.viewMode !== 'walk') return;
+  if (viewer.player.controlActive && viewer.pois.hovered !== lastHover) {
     lastHover = viewer.pois.hovered;
     updateHover(lastHover);
   }
 }, 90);
 
 // --------------------------------------------------------------------------- //
-// Keyboard shortcuts
+// Keyboard
 // --------------------------------------------------------------------------- //
+
+const VIEW_KEYS = Object.fromEntries(Object.entries(VIEW_MODES).map(([id, v]) => [v.key, id]));
 
 window.addEventListener('keydown', (e) => {
   if (!ready) return;
-  if (e.code === 'KeyT') { $('btn-tour').click(); }
-  if (e.code === 'KeyR') { $('btn-rooms').click(); }
-  if (e.code === 'Escape') { closeDrawer('poi'); closeDrawer('rooms'); }
-  if (e.code === 'Digit1') viewer.setTimeOfDay('morning');
-  if (e.code === 'Digit2') viewer.setTimeOfDay('noon');
-  if (e.code === 'Digit3') viewer.setTimeOfDay('evening');
+  if (VIEW_KEYS[e.key]) { switchView(VIEW_KEYS[e.key]); return; }
+  switch (e.code) {
+    case 'KeyT': $('btn-tour').click(); break;
+    case 'KeyR': $('btn-rooms').click(); break;
+    case 'KeyP': $('btn-stats').click(); break;
+    case 'KeyM': cycleTimeOfDay(); break;
+    case 'Escape': closeDrawer('poi'); closeDrawer('rooms'); break;
+    case 'Space': if (viewer.tourPlayer) { e.preventDefault(); viewer.pauseTour(); } break;
+    case 'BracketRight': if (viewer.tourPlayer) viewer.tourNext(); break;
+    case 'BracketLeft': if (viewer.tourPlayer) viewer.tourPrev(); break;
+    default: break;
+  }
 });
+
+function cycleTimeOfDay() {
+  const keys = Object.keys(TIME_OF_DAY);
+  const i = keys.indexOf(viewer.timeOfDay);
+  viewer.setTimeOfDay(keys[(i + 1) % keys.length]);
+}
 
 $('btn-help').addEventListener('click', () => {
   $('start').classList.remove('hidden');
@@ -352,7 +499,7 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 1800);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 2000);
 }
 
 // --------------------------------------------------------------------------- //
@@ -363,11 +510,13 @@ setProgress(0.05, 'Fetching scene…');
 viewer.load(SCENE_URL, (f) => setProgress(0.05 + f * 0.9, `Loading geometry… ${Math.round(f * 100)}%`))
   .then(() => {
     viewer.start();
+    for (const b of $('views').querySelectorAll('button')) {
+      b.classList.toggle('on', b.dataset.mode === viewer.viewMode);
+    }
     const wanted = new URLSearchParams(location.search).get('poi');
     if (wanted && viewer.reg.poiById.has(wanted)) {
-      const poi = viewer.reg.poiById.get(wanted);
       viewer.goToPoi(wanted);
-      openPoi(poi);
+      openPoi(viewer.reg.poiById.get(wanted));
       $('start').classList.add('hidden');
     }
   })

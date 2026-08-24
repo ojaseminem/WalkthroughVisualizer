@@ -54,6 +54,12 @@ const SHOTS = [
   // up buried inside a context block.
   { name: '12-massing',  level: 'L00', free: [-24, 28, -34], look: [11, 7, 4], tod: 'evening' },
   { name: '13-approach', level: 'L00', free: [11, 2.2, -26], look: [11, 6, 0], tod: 'morning' },
+  // View modes drive themselves — the rig picks the framing, so these assert the
+  // mode's own default pose rather than a hand-placed camera.
+  { name: '14-dollhouse', mode: 'dollhouse', level: 'L01', tod: 'noon' },
+  { name: '15-plan-L01',  mode: 'plan',      level: 'L01', tod: 'noon' },
+  { name: '16-exploded',  mode: 'exploded',  level: 'L01', tod: 'morning' },
+  { name: '17-exploded-low', mode: 'exploded', level: 'L01', tod: 'evening', azimuth: 0.9, elevation: 0.22 },
 ];
 
 const errors = [];
@@ -237,6 +243,117 @@ check('stair does not punch the slab', physics.stairTopY < 6.4,
   `arrived at y=${physics.stairTopY.toFixed(2)}`);
 
 // --------------------------------------------------------------------------- //
+// View modes and tour
+// --------------------------------------------------------------------------- //
+
+const modes = await page.evaluate(async () => {
+  const wv = window.wv;
+  const out = {};
+  const settle = (n = 200) => {
+    for (let i = 0; i < n; i++) { wv.rig.update(1 / 60); wv.explode.update(1 / 60); }
+  };
+
+  out.modeIds = Object.keys(window.wv.constructor === Object ? {} : {});
+
+  // Dollhouse: rig should frame the whole site from outside it.
+  wv.setViewMode('dollhouse', { animate: false });
+  settle();
+  out.dollhouseDist = wv.rig.distance;
+  out.dollhouseMode = wv.viewMode;
+  out.playerDisabledInOrbit = wv.player.enabled === false;
+
+  // Plan: near-vertical, and levels above the current one hidden.
+  wv.setLevel('L01', { teleport: false });
+  wv.setViewMode('walk', { animate: false });
+  wv.setViewMode('plan', { animate: false });
+  settle();
+  out.planElevation = wv.rig.elevation;
+  out.hiddenAbove = wv.reg.levels.filter((l) => l.object.visible === false).map((l) => l.id);
+
+  // Exploded: levels pulled apart, and put back when walk resumes.
+  wv.setViewMode('walk', { animate: false });
+  wv.setViewMode('exploded', { animate: false });
+  settle(400);
+  out.spread = wv.explode.spread;
+  const l3 = wv.reg.levelById.get('L03');
+  out.l3ExplodedY = l3.object.position.y;
+  out.l3BaseY = l3.elevation;
+  out.allLevelsVisible = wv.reg.levels.every((l) => l.object.visible);
+
+  wv.setViewMode('walk', { animate: false });
+  settle(400);
+  out.spreadAfterWalk = wv.explode.spread;
+  out.l3RestoredY = l3.object.position.y;
+
+  // Tour: stops, seeking, and a look target that is not just the path tangent.
+  wv.setLevel('L01', { teleport: false });
+  wv.startTour();
+  const t = wv.tourPlayer;
+  out.tourStops = t ? t.keys.length : 0;
+  out.tourDuration = t ? Math.round(t.duration) : 0;
+  if (t) {
+    t.seekToStop(3);
+    t.update(wv.camera, 1 / 60);
+    out.seekedStop = t.stopIndex;
+    t.paused = true;
+    const before = t.time;
+    t.update(wv.camera, 1 / 60);
+    out.pauseHolds = Math.abs(t.time - before) < 1e-6;
+    t.paused = false;
+    t.seekFraction(1);
+    out.finishes = t.finished;
+  }
+  wv.stopTour();
+  out.playerBackAfterTour = wv.player.enabled === true;
+  return out;
+});
+
+check('orbit modes disable the player', modes.playerDisabledInOrbit === true);
+check('dollhouse frames the site', modes.dollhouseDist > 20 && modes.dollhouseDist < 120,
+  `distance ${modes.dollhouseDist.toFixed(1)} m`);
+check('plan view looks down', modes.planElevation > 1.35,
+  `elevation ${modes.planElevation.toFixed(2)} rad of 1.571`);
+check('plan hides levels above', modes.hiddenAbove.join(',') === 'L02,L03,ROOF',
+  modes.hiddenAbove.join(',') || 'none hidden');
+check('exploded separates levels', modes.spread > 2.5 && modes.l3ExplodedY > modes.l3BaseY * 2,
+  `L03 ${modes.l3BaseY} m -> ${modes.l3ExplodedY.toFixed(1)} m`);
+check('exploded shows every level', modes.allLevelsVisible === true);
+check('walk restores level positions', Math.abs(modes.l3RestoredY - modes.l3BaseY) < 0.01,
+  `L03 back to ${modes.l3RestoredY.toFixed(2)} m`);
+check('tour has stops and a duration', modes.tourStops >= 5 && modes.tourDuration > 20,
+  `${modes.tourStops} stops · ${modes.tourDuration}s`);
+check('tour seeks to a stop', modes.seekedStop === 3, `landed on ${modes.seekedStop}`);
+check('tour pause holds time', modes.pauseHolds === true);
+check('tour reports finished', modes.finishes === true);
+check('player resumes after tour', modes.playerBackAfterTour === true);
+
+// The switcher must mark exactly one mode — a stale `.on` would leave the
+// viewer unable to tell which view they are actually in.
+const switcher = await page.evaluate(() => {
+  const wv = window.wv;
+  const read = () => ({
+    views: [...document.querySelectorAll('#views button')].filter((b) => b.classList.contains('on'))
+      .map((b) => b.dataset.mode),
+    levels: [...document.querySelectorAll('#levels button')].filter((b) => b.classList.contains('on'))
+      .map((b) => b.dataset.level),
+  });
+  wv.setViewMode('walk', { animate: false });
+  wv.setViewMode('dollhouse', { animate: false });
+  const a = read();
+  wv.setViewMode('plan', { animate: false });
+  const b = read();
+  wv.setViewMode('walk', { animate: false });
+  const c = read();
+  return { a, b, c };
+});
+check('one view mode marked active',
+  switcher.a.views.join() === 'dollhouse'
+  && switcher.b.views.join() === 'plan'
+  && switcher.c.views.join() === 'walk',
+  `${switcher.a.views}|${switcher.b.views}|${switcher.c.views}`);
+check('one level marked active', switcher.c.levels.length === 1, switcher.c.levels.join());
+
+// --------------------------------------------------------------------------- //
 // Perf sample
 // --------------------------------------------------------------------------- //
 
@@ -274,6 +391,89 @@ const perf = await page.evaluate(async (frameCount) => {
 // Draw calls and triangle counts are the numbers that carry to real hardware.
 check('draw calls within budget', perf.drawCalls <= 150, `${perf.drawCalls} / 150`);
 check('triangles within budget', perf.triangles <= 180000, `${perf.triangles} / 180000`);
+
+// --------------------------------------------------------------------------- //
+// Mobile pass — a real touch context, not a narrow desktop window
+//
+// `isTouchDevice()` is read once at module load, so the only honest way to test
+// the phone build is a second browser context that actually reports touch.
+// --------------------------------------------------------------------------- //
+
+let mobile = { skipped: true };
+const mctx = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 1,
+  isMobile: true,
+  hasTouch: true,
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 '
+    + '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+});
+const mpage = await mctx.newPage();
+const mobileErrors = [];
+mpage.on('pageerror', (e) => mobileErrors.push(e.message));
+try {
+  // Both pages rasterise in software on the same CPU. Leaving the desktop render
+  // loop running starves the phone context and it never finishes its first frame.
+  await page.evaluate(() => window.wv?.stop());
+  await mpage.goto(URL_BASE, { waitUntil: 'networkidle' });
+  await mpage.waitForFunction(() => window.wv && window.wv.reg, null, { timeout: 120000 });
+
+  mobile = await mpage.evaluate(async () => {
+    const wv = window.wv;
+    const out = {};
+    out.detectedTouch = wv.isTouch === true;
+    out.hasTouchLayer = !!wv.touch;
+    out.bodyTouchClass = document.body.classList.contains('touch');
+    out.crosshairHidden = getComputedStyle(document.getElementById('crosshair')).display === 'none';
+
+    // Drive the virtual stick the way a thumb would: press in the lower-left
+    // zone, drag up, and confirm the player receives forward analog input.
+    const canvas = document.querySelector('#stage canvas');
+    const r = canvas.getBoundingClientRect();
+    const ox = r.left + r.width * 0.18;
+    const oy = r.top + r.height * 0.78;
+    const ev = (type, x, y, id) => canvas.dispatchEvent(new PointerEvent(type, {
+      pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true,
+    }));
+    ev('pointerdown', ox, oy, 1);
+    ev('pointermove', ox, oy - 50, 1);
+    out.stickVisible = document.getElementById('stick').classList.contains('on');
+    out.analogForward = wv.player.analog.y;      // negative is forward
+    out.analogSide = wv.player.analog.x;
+
+    // Walking must actually move the player, using the same fixed-step drive.
+    wv.player.enabled = true;
+    const before = wv.player.position.clone();
+    for (let i = 0; i < 90; i++) wv.player.update(1 / 60);
+    out.walked = wv.player.position.distanceTo(before);
+
+    ev('pointerup', ox, oy - 50, 1);
+    out.analogReleased = wv.player.analog.y;
+    out.stickHidden = !document.getElementById('stick').classList.contains('on');
+
+    // Look-drag on the right side of the screen.
+    const yaw0 = wv.player.yaw;
+    ev('pointerdown', r.left + r.width * 0.8, r.top + r.height * 0.5, 2);
+    ev('pointermove', r.left + r.width * 0.8 - 90, r.top + r.height * 0.5, 2);
+    ev('pointerup', r.left + r.width * 0.8 - 90, r.top + r.height * 0.5, 2);
+    out.yawChanged = Math.abs(wv.player.yaw - yaw0) > 0.1;
+    return out;
+  });
+
+  check('mobile detects touch', mobile.detectedTouch && mobile.hasTouchLayer && mobile.bodyTouchClass);
+  check('mobile hides the crosshair', mobile.crosshairHidden === true);
+  check('virtual stick appears on touch', mobile.stickVisible === true);
+  check('stick drives forward input', mobile.analogForward < -0.4,
+    `analog.y = ${mobile.analogForward?.toFixed(2)}`);
+  check('stick actually walks the player', mobile.walked > 1.0, `${mobile.walked?.toFixed(2)} m`);
+  check('stick releases cleanly', mobile.analogReleased === 0 && mobile.stickHidden === true);
+  check('look drag turns the camera', mobile.yawChanged === true);
+  check('no mobile page errors', mobileErrors.length === 0, mobileErrors.slice(0, 2).join(' | '));
+} catch (err) {
+  check('mobile pass ran', false, err.message.split('\n')[0]);
+} finally {
+  await page.evaluate(() => window.wv?.start()).catch(() => {});
+}
 
 // --------------------------------------------------------------------------- //
 // Report the checks BEFORE anything slow
@@ -359,6 +559,9 @@ if (SHOT_QUALITY !== 'off') {
     try {
       if (setup) await setup();
       await settle(frames);
+      // The DOM paints on its own schedule, so a class change that started a
+      // CSS transition can still be mid-fade when the WebGL frames have landed.
+      await page.waitForTimeout(220);
       await page.screenshot({ path: `${OUT}/${name}.png`, timeout: 60000 });
       shotResults.taken.push(name);
     } catch (err) {
@@ -370,7 +573,27 @@ if (SHOT_QUALITY !== 'off') {
     await shoot(s.name, () => page.evaluate((shot) => {
       const wv = window.wv;
       wv.setTimeOfDay(shot.tod);
+
+      if (shot.mode) {
+        // A mode shot asserts the rig's own framing, not a hand-placed camera.
+        wv.setViewMode('walk', { animate: false });
+        wv.setLevel(shot.level, { teleport: false });
+        wv.setViewMode(shot.mode, { animate: false });
+        if (typeof shot.azimuth === 'number') wv.rig.desiredAzimuth = shot.azimuth;
+        if (typeof shot.elevation === 'number') wv.rig.desiredElevation = shot.elevation;
+        // Settle rig and explode at a fixed timestep — real frames are far too
+        // slow here to let either animation converge.
+        for (let i = 0; i < 400; i++) { wv.rig.update(1 / 60); wv.explode.update(1 / 60); }
+        wv.blend.t = 1;
+        wv.camera.position.copy(wv.rig.pose());
+        wv.camera.up.set(0, 1, 0);
+        wv.camera.lookAt(wv.rig.target);
+        return;
+      }
+
+      wv.setViewMode('walk', { animate: false });
       wv.setLevel(shot.level, { teleport: false });
+      wv.blend.t = 1;
       if (shot.free) {
         wv.player.enabled = false;
         wv.camera.position.set(...shot.free);
@@ -385,20 +608,81 @@ if (SHOT_QUALITY !== 'off') {
     }, s));
   }
 
-  await shoot('14-directory', () => page.evaluate(() => {
+  await shoot('18-directory', () => page.evaluate(() => {
+    window.wv.setViewMode('walk', { animate: false });
+    window.wv.blend.t = 1;
     window.wv.player.enabled = true;
     window.wv.setLevel('L01');
     window.wv.setTimeOfDay('noon');
     document.getElementById('btn-rooms').click();
   }));
 
-  await shoot('15-poi-panel', () => page.evaluate(() => {
+  await shoot('19-poi-panel', () => page.evaluate(() => {
     document.getElementById('btn-rooms').click();
     const wv = window.wv;
     const poi = wv.reg.poiById.get('l01.a.kitchen');
     wv.goToPoi('l01.a.kitchen');
     wv.pois.setHovered(poi);
   }), 3);
+
+  // Phone shots, from the touch context that is already loaded.
+  const mobileShots = [
+    { name: '20-mobile-start', setup: null },
+    { name: '21-mobile-walk', setup: () => mpage.evaluate(() => {
+      document.getElementById('start').classList.add('hidden');
+      const wv = window.wv;
+      wv.setViewMode('walk', { animate: false });
+      wv.setLevel('L01', { teleport: false });
+      wv.player.enabled = true;
+      wv.player.teleport(14.9, 3.2, 2.5, -2.36);
+      wv.player.pitch = -0.08;
+      wv.player.update(1 / 60);
+      const c = document.querySelector('#stage canvas');
+      const r = c.getBoundingClientRect();
+      const ev = (t, x, y) => c.dispatchEvent(new PointerEvent(t, {
+        pointerId: 9, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true,
+      }));
+      ev('pointerdown', r.left + r.width * 0.2, r.top + r.height * 0.76);
+      ev('pointermove', r.left + r.width * 0.2 + 26, r.top + r.height * 0.76 - 40);
+    }) },
+    { name: '22-mobile-exploded', setup: () => mpage.evaluate(() => {
+      const wv = window.wv;
+      wv.setViewMode('walk', { animate: false });
+      wv.setViewMode('exploded', { animate: false });
+      for (let i = 0; i < 400; i++) { wv.rig.update(1 / 60); wv.explode.update(1 / 60); }
+      wv.blend.t = 1;
+      wv.camera.position.copy(wv.rig.pose());
+      wv.camera.up.set(0, 1, 0);
+      wv.camera.lookAt(wv.rig.target);
+    }) },
+    { name: '23-mobile-tour', setup: () => mpage.evaluate(() => {
+      const wv = window.wv;
+      wv.setViewMode('walk', { animate: false });
+      wv.startTour();
+      for (let i = 0; i < 260; i++) wv.tourPlayer.update(wv.camera, 1 / 60);
+      wv.blend.t = 1;
+    }) },
+  ];
+
+  // Hand the CPU back to the phone context for its shots.
+  if (!mobile.skipped) await page.evaluate(() => window.wv?.stop()).catch(() => {});
+
+  for (const m of mobileShots) {
+    if (mobile.skipped) break;
+    try {
+      if (m.setup) await m.setup();
+      await mpage.evaluate(() => new Promise((res) => {
+        let i = 0;
+        const t = () => (++i >= 2 ? res() : requestAnimationFrame(t));
+        requestAnimationFrame(t);
+      }));
+      await mpage.waitForTimeout(220);
+      await mpage.screenshot({ path: `${OUT}/${m.name}.png`, timeout: 60000 });
+      shotResults.taken.push(m.name);
+    } catch (err) {
+      shotResults.failed.push(`${m.name}: ${err.message.split('\n')[0]}`);
+    }
+  }
 
   const line = [`${shotResults.taken.length} taken`];
   if (shotResults.failed.length) line.push(`${shotResults.failed.length} failed`);
@@ -409,6 +693,7 @@ if (SHOT_QUALITY !== 'off') {
 }
 console.log('');
 
+await mctx.close().catch(() => {});
 await browser.close();
 if (server) await server.close();
 

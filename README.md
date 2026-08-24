@@ -6,10 +6,12 @@ guided tours, level switching — with no per-project code.
 
 Same engine for archviz, hospitals, malls, plants. Different tags.
 
-**Status: M1 — vertical slice complete.** The demo scene is a 2 BHK residential
-tower (Pune typology, Kolte Patil Western Avenue as the plan reference): ground
-lobby, three typical floors, two mirrored flats per floor, central core with
-lifts and a continuous stair to the terrace.
+Built by **Turtle Game Works**.
+
+**Status: M2 — four view modes, touch controls, guided tour.** The demo scene is
+a 2 BHK residential tower (Pune typology, Kolte Patil Western Avenue as the plan
+reference): ground lobby, three typical floors, two mirrored flats per floor,
+central core with lifts and a continuous stair to the terrace.
 
 ---
 
@@ -22,9 +24,30 @@ npm run scene                      # procedurally build the tagged .glb
 npm run dev                        # http://localhost:5173
 ```
 
-Click to take control. `W A S D` move, mouse looks, `Shift` walks faster,
-`Space` hops a step, `Esc` releases. `T` starts the guided tour, `R` opens the
-room directory, `1` `2` `3` switch time of day.
+**Desktop.** Click to take control. `W A S D` move, mouse looks, `Shift` walks
+faster, `Space` hops a step, `Esc` releases. `1`–`4` switch view mode, `T` the
+guided tour, `R` the room directory, `M` cycles time of day, `P` the performance
+readout. During a tour: `Space` pauses, `[` and `]` step between stops.
+
+**Phone and tablet.** Detected automatically. Drag the left thumb to walk — a
+floating stick appears where the thumb lands, and how far you push it sets your
+pace. Drag anywhere else to look. Tap a marker to open it. In the orbit views,
+drag to orbit, pinch to zoom, two fingers to pan.
+
+## View modes
+
+| Mode | What it is for |
+|---|---|
+| **Walk** | First person at eye height, with collision and step-up. |
+| **Dollhouse** | Orbit the whole building from outside. |
+| **Floor plan** | Straight down at the current level, levels above hidden. |
+| **Exploded** | Levels pulled apart so every floor plate reads at once. |
+
+All four share one orbit rig with per-mode constraints, so switching is a blend
+between two poses rather than a camera swap — the viewer never teleports and
+never loses their bearings. Exploded view moves rendering only: the spread
+always returns to 1 before walk mode resumes, which keeps the registry's cached
+world boxes valid.
 
 ## Layout
 
@@ -41,7 +64,10 @@ tools/modelgen/      Procedural building generator (Python -> tagged .glb)
   plan.py            the 2BHK plan and building massing, as data
   generate_tower.py  geometry emission and tagging
   glbwriter.py       minimal glTF writer that preserves `extras`
-tools/verify/        Headless Chromium checks — registry, physics, perf, shots
+  viewmodes.js       orbit rig, level explode, pose blending
+  tour.js            guided tour: timeline, scrubbing, per-stop look targets
+  touch.js           floating stick, look drag, tap — phones and tablets
+tools/verify/        Headless Chromium checks — registry, physics, modes, mobile
 docs/                Tag schema and the approved plan
 ```
 
@@ -114,9 +140,14 @@ The harness serves `apps/viewer/dist` itself on an OS-assigned port, so there is
 no background server, no fixed port, and no startup race. Point it at a running
 dev server instead with `--url http://localhost:5173/`.
 
-23 checks across the registry, movement, and render budgets, then 15 screenshots
-into `tools/verify/out/`. Three deliberate choices, each of which cost a CI run
-to learn:
+45 checks across the registry, movement, view modes, the tour, and the touch
+build, then 23 screenshots into `tools/verify/out/`. The mobile checks run in a
+second browser context that actually reports touch — `isTouchDevice()` is read
+once at module load, so a narrow desktop window would not exercise the same code.
+Both contexts rasterise in software on one CPU, so each pauses the other's render
+loop while it works.
+
+Three deliberate choices, each of which cost a CI run to learn:
 
 - **Movement runs at a fixed timestep**, not wall-clock. Headless Chromium has no
   GPU and rasterises in software at around one frame per second, so a
@@ -137,13 +168,15 @@ caught either of the two bugs it found on first run.
 
 - **M0** Approve references, freeze scope — done
 - **M1** Vertical slice — done
-- **M2** `wv-cli`: meshopt + KTX2, LODs, navmesh bake, portal graph,
-  `project.json`, validator with hard failures, automated perf budget
-- **M3** JSON-driven UI: walk / dollhouse / plan triad, minimap, tour player,
-  variants, measurement, client theming
-- **M4** Blender tagging add-on
-- **M5** Archviz and hospital presets finished, with baked lighting
-- **M6** Mobile budgets, WebGPU path, VR, analytics, embed SDK, docs
+- **M2** View modes, touch controls, guided tour, branding — done
+- **M3** `wv-cli`: meshopt + KTX2, LODs, navmesh bake, portal graph,
+  `project.json`, validator with hard failures, automated perf budget.
+  **First job: material merging** — the full-exterior view runs ~213 draw calls
+  against a 150 budget because six flats x ~16 materials are never merged.
+- **M4** JSON-driven panels, minimap, measurement, finish variants, client theming
+- **M5** Blender tagging add-on
+- **M6** Archviz and hospital presets finished, with baked lighting
+- **M7** WebGPU path, VR, analytics, embed SDK, docs site
 
 ## Deployment
 

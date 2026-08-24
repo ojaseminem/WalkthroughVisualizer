@@ -58,12 +58,27 @@ export class PoiLayer {
       sp.scale.setScalar(0.34);
       sp.renderOrder = 10;
       sp.userData.poi = poi;
+      sp.userData.baseY = poi.position.y;
       this.group.add(sp);
       this.sprites.push(sp);
     }
   }
 
-  setLevel(levelId) {
+  /** Follow the levels when they are pulled apart in exploded view. */
+  setExplode(spread, registry) {
+    for (const sp of this.sprites) {
+      const lv = registry.levelById.get(sp.userData.poi.level);
+      const elev = lv ? lv.elevation : 0;
+      sp.position.y = sp.userData.baseY + elev * (spread - 1);
+    }
+  }
+
+  setLevel(levelId, { all = false } = {}) {
+    if (all) {
+      for (const sp of this.sprites) sp.visible = true;
+      this.activeLevel = null;
+      return;
+    }
     this.activeLevel = levelId;
     for (const sp of this.sprites) {
       sp.visible = !levelId || sp.userData.poi.level === levelId;
@@ -80,19 +95,27 @@ export class PoiLayer {
   setHovered(poi) {
     if (this.hovered === poi) return;
     this.hovered = poi;
-    for (const sp of this.sprites) {
-      const on = sp.userData.poi === poi;
-      sp.scale.setScalar(on ? 0.44 : 0.34);
-      sp.material.opacity = on ? 1.0 : 0.95;
-    }
+    // Scale and opacity are owned by update(), which also factors in distance;
+    // setting them here too would fight it every frame.
   }
 
-  /** Pins fade out when very close so they never block the view of the thing. */
+  /**
+   * Pins shrink and fade as you approach them.
+   *
+   * A world-sized sprite grows without limit as the camera closes on it, so a
+   * marker two metres away fills a phone screen and hides the thing it labels.
+   */
   update(cameraPos) {
+    const NEAR = 3.4;     // start fading here
+    const GONE = 1.1;     // fully faded by here
     for (const sp of this.sprites) {
       if (!sp.visible) continue;
       const d = sp.position.distanceTo(cameraPos);
-      sp.material.opacity = d < 1.6 ? Math.max(0, (d - 0.7) / 0.9) : 0.95;
+      const base = sp.userData.poi === this.hovered ? 0.44 : 0.34;
+      sp.scale.setScalar(base * Math.min(1, Math.max(0.45, d / 4.5)));
+      sp.material.opacity = d < NEAR
+        ? Math.max(0, Math.min(1, (d - GONE) / (NEAR - GONE))) * 0.95
+        : 0.95;
     }
   }
 }

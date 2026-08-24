@@ -34,6 +34,11 @@ export class Player {
     this.keys = new Set();
     this.headBob = 0;
 
+    // Analog input, written by the touch layer. Keyboard and touch feed the same
+    // movement code — there is no second movement implementation for mobile.
+    this.analog = { x: 0, y: 0 };
+    this.touchActive = false;
+
     this._onKeyDown = (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
@@ -59,6 +64,17 @@ export class Player {
     window.addEventListener('keyup', this._onKeyUp);
     document.addEventListener('mousemove', this._onMove);
     document.addEventListener('pointerlockchange', this._onLockChange);
+  }
+
+  /** True when something is actually driving the player — pointer lock or touch. */
+  get controlActive() {
+    return this.locked || this.touchActive;
+  }
+
+  /** Look input in radians, applied by the touch layer. */
+  look(dYaw, dPitch) {
+    this.yaw -= dYaw;
+    this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch - dPitch));
   }
 
   requestLock() {
@@ -97,17 +113,33 @@ export class Player {
     if (k.has('KeyA') || k.has('ArrowLeft')) fx -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) fx += 1;
 
-    const len = Math.hypot(fx, fz);
-    const speed = (k.has('ShiftLeft') || k.has('ShiftRight')) ? RUN : WALK;
+    // Analog stick wins where it is pushed, so a touch drag gives fine speed
+    // control instead of the on/off a key gives.
+    let analogDrive = false;
+    if (Math.hypot(this.analog.x, this.analog.y) > 0.05) {
+      fx = this.analog.x;
+      fz = this.analog.y;
+      analogDrive = true;
+    }
+
+    const raw = Math.hypot(fx, fz);
+    const len = raw > 0 ? 1 : 0;
+    // Keys are on/off, so they always run at full throttle; only the stick
+    // scales speed by how far it is pushed. Without this split, holding W+A
+    // reads as a magnitude of 1.41 and diagonal walking becomes a sprint.
+    const throttle = analogDrive ? Math.min(raw, 1) : 1;
+    const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || (analogDrive && raw > 0.92);
+    const speed = (sprinting ? RUN : WALK) * throttle;
+
     let wishX = 0, wishZ = 0;
-    if (len > 0 && this.locked) {
-      fx /= len; fz /= len;
+    if (len > 0 && this.controlActive) {
+      fx /= raw; fz /= raw;
       // Camera forward after rotateY(yaw) is (-sin, 0, -cos) and right is
       // (cos, 0, -sin). Deriving the basis from that keeps WASD locked to where
       // the player is actually looking.
-      const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
-      wishX = (fx * c + fz * s) * speed;
-      wishZ = (-fx * s + fz * c) * speed;
+      const s2 = Math.sin(this.yaw), c2 = Math.cos(this.yaw);
+      wishX = (fx * c2 + fz * s2) * speed;
+      wishZ = (-fx * s2 + fz * c2) * speed;
     }
 
     const blend = 1 - Math.exp(-(len > 0 ? ACCEL : DAMP) * dt);
