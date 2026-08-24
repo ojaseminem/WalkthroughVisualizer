@@ -1,0 +1,75 @@
+name: Deploy viewer to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          npm ci
+          pip install pygltflib numpy
+
+      # The scene is generated from source rather than committed as a binary, so
+      # a change to plan.py shows up as a reviewable diff instead of an opaque
+      # .glb blob. The committed copy is a convenience for local dev only.
+      - name: Generate scene
+        run: npm run scene
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify
+        run: |
+          npx playwright install --with-deps chromium
+          npx vite preview --port 4173 --host 127.0.0.1 --outDir dist &
+          npx wait-on http://127.0.0.1:4173/ -t 60000
+          node tools/verify/capture.mjs --url http://127.0.0.1:4173/
+        working-directory: .
+        continue-on-error: false
+
+      - name: Upload verification screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification
+          path: tools/verify/out
+          retention-days: 14
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/viewer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

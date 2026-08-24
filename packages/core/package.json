@@ -1,0 +1,16 @@
+{
+  "name": "@wv/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./registry": "./src/registry.js",
+    "./player": "./src/player.js",
+    "./collision": "./src/collision.js",
+    "./pois": "./src/pois.js"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  }
+}

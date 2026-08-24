@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aster Residences — Walkthrough Visualizer</title>
+<meta name="description" content="Tag-driven WebGL walkthrough — 2BHK residential tower demo.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<div id="stage"></div>
+
+<!-- Loading -->
+<div id="loader" class="overlay">
+  <div class="loader-inner">
+    <p class="eyebrow">Walkthrough Visualizer <span class="rev">v0.1</span></p>
+    <h1 id="load-title">Aster Residences</h1>
+    <p id="load-sub" class="sub">Tower B &middot; 2 BHK &middot; Pune</p>
+    <div class="bar"><div id="bar-fill"></div></div>
+    <p id="load-status" class="status">Fetching scene&hellip;</p>
+  </div>
+</div>
+
+<!-- Start prompt -->
+<div id="start" class="overlay hidden">
+  <div class="loader-inner">
+    <p class="eyebrow">Ready</p>
+    <h1>Walk the building</h1>
+    <p class="sub">Click to take control. <b>W A S D</b> to move, mouse to look,
+      <b>Shift</b> to walk faster, <b>Space</b> to hop a step, <b>Esc</b> to release.</p>
+    <button id="start-btn" class="primary">Enter walkthrough</button>
+    <p class="status">Or press <b>T</b> for the guided tour.</p>
+  </div>
+</div>
+
+<!-- HUD -->
+<header id="hud-top">
+  <div class="brand">
+    <span class="mark"></span>
+    <div>
+      <p id="proj-name">Aster Residences — Tower B</p>
+      <p id="proj-sub" class="mono">archviz preset &middot; schema 0.1</p>
+    </div>
+  </div>
+  <div id="stats" class="mono panel-chrome" aria-live="off">
+    <span><b id="s-fps">--</b> fps</span>
+    <span><b id="s-calls">--</b> calls</span>
+    <span><b id="s-tris">--</b> tris</span>
+    <span id="s-budget" class="badge ok">within budget</span>
+  </div>
+</header>
+
+<div id="crosshair"><span></span></div>
+<div id="hover-label" class="hidden"></div>
+
+<div id="locus" class="panel-chrome">
+  <p class="mono lbl">You are in</p>
+  <p id="locus-zone">&mdash;</p>
+  <p id="locus-meta" class="mono"></p>
+</div>
+
+<nav id="levels" class="panel-chrome" aria-label="Levels"></nav>
+
+<div id="bottom-left">
+  <div id="tod" class="panel-chrome" role="group" aria-label="Time of day"></div>
+</div>
+
+<div id="bottom-right">
+  <button id="btn-rooms" class="chip">Rooms</button>
+  <button id="btn-tour" class="chip">Guided tour</button>
+  <button id="btn-help" class="chip" title="Controls">?</button>
+</div>
+
+<aside id="rooms" class="drawer hidden" aria-label="Room directory">
+  <header><h2>Directory</h2><button class="x" data-close="rooms">&times;</button></header>
+  <div id="rooms-list"></div>
+</aside>
+
+<aside id="poi" class="drawer hidden" aria-label="Point of interest">
+  <header><h2 id="poi-title">&mdash;</h2><button class="x" data-close="poi">&times;</button></header>
+  <div class="drawer-body">
+    <p id="poi-body"></p>
+    <dl id="poi-fields"></dl>
+    <p id="poi-zone" class="mono foot"></p>
+  </div>
+</aside>
+
+<div id="tour-bar" class="hidden panel-chrome">
+  <span class="mono lbl">Guided tour</span>
+  <strong id="tour-stop">&mdash;</strong>
+  <button id="tour-exit" class="chip small">Exit</button>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

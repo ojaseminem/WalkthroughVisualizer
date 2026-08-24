@@ -1,0 +1,22 @@
+{
+  "name": "walkthrough-visualizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tag-driven WebGL walkthrough system for archviz, healthcare and facility digital experiences",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @wv/viewer",
+    "build": "npm run build --workspace @wv/viewer",
+    "preview": "npm run preview --workspace @wv/viewer",
+    "scene": "cd tools/modelgen && python3 generate_tower.py ../../apps/viewer/public/content/kp-tower/scene.glb"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "playwright": "^1.62.1",
+    "wait-on": "^9.1.0"
+  }
+}
