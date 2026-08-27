@@ -32,7 +32,7 @@ jobs:
       - name: Install
         run: |
           npm ci
-          pip install pygltflib numpy
+          pip install -r tools/modelgen/requirements.txt
 
       # The scene is generated from source rather than committed as a binary, so
       # a change to plan.py shows up as a reviewable diff instead of an opaque

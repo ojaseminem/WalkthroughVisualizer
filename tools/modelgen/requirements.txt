@@ -1,0 +1,9 @@
+# Only needed to regenerate the source art with `npm run content`. The optimised
+# bundle in apps/viewer/public/content/ is committed, so a plain build and a
+# plain `npm run dev` need none of this.
+#
+# Keep this file as the single list. It has been forgotten in the CI workflow
+# twice now, each time costing a red build for a missing import.
+pygltflib
+numpy
+pillow

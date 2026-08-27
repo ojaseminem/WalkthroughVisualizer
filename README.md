@@ -21,7 +21,7 @@ continuous stair to the terrace.
 
 ```bash
 npm install
-pip install pygltflib numpy pillow   # only needed to regenerate content
+pip install -r tools/modelgen/requirements.txt   # only to regenerate content
 npm run content                      # generate source art, then optimise it
 npm run dev                          # http://localhost:5173
 ```
