@@ -42,7 +42,7 @@ LEVELS = [
 ]
 
 # --------------------------------------------------------------------------- #
-# Rooms — rects are (x0, z0, x1, z1) in unit-local space
+# Rooms. Rects are (x0, z0, x1, z1) in unit-local space.
 # --------------------------------------------------------------------------- #
 
 ROOMS = [
@@ -130,7 +130,7 @@ WALLS = [
 ]
 
 # --------------------------------------------------------------------------- #
-# Portals — one per door opening, wired to the zones either side
+# Portals. One per door opening, wired to the zone on either side.
 # --------------------------------------------------------------------------- #
 
 PORTALS = [
@@ -146,7 +146,7 @@ PORTALS = [
 ]
 
 # --------------------------------------------------------------------------- #
-# Furniture — (x0, z0, x1, z1, y0, y1, material, is_obstacle)
+# Furniture: (x0, z0, x1, z1, y0, y1, material, is_obstacle)
 # --------------------------------------------------------------------------- #
 
 FURNITURE = [
@@ -164,7 +164,7 @@ FURNITURE = [
     (2.95, 0.45, 3.35, 0.85, 0.00, 0.45, "fabric", True),    # chair
     (2.95, 0.75, 3.35, 1.15, 0.00, 0.45, "fabric", True),    # chair
 
-    # kitchen — L counter along the east and north walls
+    # kitchen, L counter along the east and north walls
     (7.70, 0.25, 8.28, 3.10, 0.00, 0.90, "cabinet", True),
     (7.70, 0.25, 8.28, 3.10, 0.90, 0.94, "counter", False),
     (5.75, 0.25, 7.70, 0.83, 0.00, 0.90, "cabinet", True),
@@ -179,7 +179,9 @@ FURNITURE = [
     (6.20, 4.60, 7.70, 6.50, 0.00, 0.50, "wood_furn", True),  # bed base
     (6.20, 4.60, 7.70, 6.50, 0.50, 0.62, "linen", False),     # mattress
     (6.25, 4.62, 7.65, 4.95, 0.62, 0.80, "linen_alt", False),  # pillows
-    (5.75, 4.60, 6.15, 7.40, 0.00, 2.30, "wood_dark", True),  # wardrobe
+    # Runs from z 6.50 rather than from the wall start at 4.60. The bed2 door
+    # sits at z 5.30 to 6.20 in this same wall and the full run stood across it.
+    (5.75, 6.50, 6.15, 7.40, 0.00, 2.30, "wood_dark", True),  # wardrobe
 
     # master bedroom
     (0.90, 7.20, 2.70, 9.30, 0.00, 0.50, "wood_furn", True),
@@ -239,7 +241,7 @@ POIS = [
          fields={"Carpet area": "9.0 sq m", "Access": "Sundeck"}),
     dict(id="sundeck", zone="sundeck", label="Sundeck",
          pos=(7.0, 1.40, 8.8),
-         body="6.7 sq m of recessed outdoor space with an open corner — the only "
+         body="6.7 sq m of recessed outdoor space with an open corner. The only "
               "part of the plan with light on two sides.",
          fields={"Area": "6.7 sq m", "Aspect": "South and east"}),
 ]

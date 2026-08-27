@@ -36,17 +36,26 @@ jobs:
 
       # The scene is generated from source rather than committed as a binary, so
       # a change to plan.py shows up as a reviewable diff instead of an opaque
-      # .glb blob. The committed copy is a convenience for local dev only.
-      - name: Generate scene
-        run: npm run scene
+      # .glb. `content` runs the generator and then the wv-cli pipeline, which
+      # turns 648 draw calls and 4 MB of PNG into one file.
+      - name: Generate and optimise content
+        run: npm run content
+
+      # The pipeline must keep working on art that did not come from our own
+      # generator: deep nesting, Z-up, duplicate materials, no tags at all.
+      - name: Pipeline handles foreign geometry
+        run: |
+          node tools/wv-cli/fixtures/make-foreign.mjs /tmp/foreign.glb
+          node tools/wv-cli/wv.mjs validate /tmp/foreign.glb
+          node tools/wv-cli/wv.mjs build /tmp/foreign.glb -o /tmp/foreign-out
 
       - name: Build
         run: npm run build
 
       # Screenshots run at low quality here: a GPU-less runner cannot rasterise a
       # full-size WebGL frame inside Playwright's screenshot timeout. The checks
-      # themselves are viewport-independent and gate the build; shot failures are
-      # reported, never fatal.
+      # do not depend on viewport size and they gate the build. A failed shot is
+      # reported and never fatal.
       - name: Verify
         run: |
           npx playwright install --with-deps chromium

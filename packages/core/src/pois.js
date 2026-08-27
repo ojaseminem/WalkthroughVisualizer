@@ -33,8 +33,8 @@ function pinTexture(fill = '#C4341F') {
 }
 
 /**
- * Hotspot pins. One sprite per POI in the registry — the runtime never knows
- * what any of them mean, only that a tagged node asked for one.
+ * Hotspot pins, one sprite per POI in the registry. The runtime has no idea what
+ * any of them mean. A tagged node asked for a pin, so it gets a pin.
  */
 export class PoiLayer {
   constructor(scene, registry) {
@@ -64,7 +64,7 @@ export class PoiLayer {
     }
   }
 
-  /** Follow the levels when they are pulled apart in exploded view. */
+  /** Keep the pins with their level while the levels are pulled apart. */
   setExplode(spread, registry) {
     for (const sp of this.sprites) {
       const lv = registry.levelById.get(sp.userData.poi.level);
@@ -85,7 +85,7 @@ export class PoiLayer {
     }
   }
 
-  /** Returns the POI under the given normalised device coords, or null. */
+  /** POI under the raycaster, or null. Hidden sprites are excluded. */
   pick(raycaster) {
     const visible = this.sprites.filter((s) => s.visible);
     const hits = raycaster.intersectObjects(visible, false);
@@ -95,15 +95,16 @@ export class PoiLayer {
   setHovered(poi) {
     if (this.hovered === poi) return;
     this.hovered = poi;
-    // Scale and opacity are owned by update(), which also factors in distance;
-    // setting them here too would fight it every frame.
+    // update() owns scale and opacity because it also folds in camera distance.
+    // Anything set here would be overwritten on the next frame.
   }
 
   /**
-   * Pins shrink and fade as you approach them.
+   * Pins shrink and fade as you approach.
    *
-   * A world-sized sprite grows without limit as the camera closes on it, so a
-   * marker two metres away fills a phone screen and hides the thing it labels.
+   * sizeAttenuation grows a sprite without limit as the camera closes in. A pin
+   * two metres away covered half a phone screen and hid the fitting it was
+   * labelling.
    */
   update(cameraPos) {
     const NEAR = 3.4;     // start fading here

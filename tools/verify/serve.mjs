@@ -20,12 +20,11 @@ const TYPES = {
 };
 
 /**
- * Minimal static server for the verification run.
+ * Static file server for the verification run.
  *
- * The harness serves the build itself rather than shelling out to `vite preview`
- * and polling with wait-on. That removes a background process, a fixed port, and
- * a startup race from CI — three things that were only ever there to hand the
- * browser a URL.
+ * Serving the build in-process replaced `vite preview` plus wait-on. That pair
+ * left a preview process running after the harness exited, and flaked whenever
+ * two runs wanted the same port. All it did was hand the browser a URL.
  */
 export function serve(dir) {
   const root = resolve(dir);
@@ -36,7 +35,8 @@ export function serve(dir) {
       let rel = decodeURIComponent(url.pathname);
       if (rel.endsWith('/')) rel += 'index.html';
 
-      // Contain every request inside the served directory.
+      // Strip leading ../ before joining, then check the result is still under
+      // root. join() on its own will walk straight out of the served directory.
       const target = join(root, normalize(rel).replace(/^(\.\.[/\\])+/, ''));
       if (target !== root && !target.startsWith(root + sep)) {
         res.writeHead(403).end('Forbidden');
@@ -63,7 +63,8 @@ export function serve(dir) {
 
   return new Promise((res2, rej) => {
     server.on('error', rej);
-    // Port 0 asks the OS for a free port, so parallel runs never collide.
+    // Port 0 lets the OS pick. A fixed port collides as soon as two verify
+    // runs overlap on one machine.
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       res2({

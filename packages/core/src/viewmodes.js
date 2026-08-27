@@ -1,12 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * The view-mode triad plus exploded, sharing one orbit rig.
- *
- * Each mode is a set of constraints on the same rig rather than a separate
- * camera implementation — that way a transition between any two modes is just a
- * blend between two poses, and there is only one place where orbit input is
- * interpreted.
+ * Dollhouse, plan and exploded all run on one orbit rig. A mode is a row in
+ * LIMITS below. One rig means any transition is a blend between two poses, and
+ * pointer input is interpreted in one place.
  */
 
 export const VIEW_MODES = {
@@ -39,9 +36,9 @@ const LIMITS = {
 };
 
 function capture(el, id) {
-  // setPointerCapture throws if the pointer is no longer active — which happens
-  // on fast taps and on synthetic events. An exception here would abort the rest
-  // of the pointerdown handler and leave the control half-initialised.
+  // setPointerCapture throws once the pointer is no longer active, which happens
+  // on fast taps and on synthetic events. Letting it throw aborts the rest of
+  // the pointerdown handler and leaves the control half-initialised.
   try { el.setPointerCapture?.(id); } catch { /* not capturable, carry on */ }
 }
 
@@ -83,7 +80,7 @@ export class OrbitRig {
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       if (this._pointers.size >= 2) {
-        // Two fingers: pinch to zoom, drag to pan. Matches every map app.
+        // Two fingers: pinch zooms, drag pans, same as any map app.
         const d = this._pinchDistance();
         if (this._lastPinch > 0) this.zoom(this._lastPinch / d);
         this._lastPinch = d;
@@ -189,6 +186,7 @@ export class OrbitRig {
   }
 
   update(dt) {
+    // Frame-rate independent smoothing. k=9 settles in about a third of a second.
     const k = 1 - Math.exp(-9 * dt);
     this.azimuth += (this.desiredAzimuth - this.azimuth) * k;
     this.elevation += (this.desiredElevation - this.elevation) * k;
@@ -209,8 +207,9 @@ export class OrbitRig {
 /**
  * Pulls the levels apart vertically.
  *
- * Only rendering moves — the registry's cached world boxes stay valid because
- * the spread is always returned to 1 before walk mode resumes.
+ * Only the render transforms move. The registry's cached world boxes stay valid
+ * because spread is always back at 1 before walk mode resumes. Let walk mode run
+ * at spread > 1 and collision and zone lookup will be a whole floor out.
  */
 export class ExplodeController {
   constructor(registry, poiLayer) {
@@ -242,14 +241,21 @@ export class ExplodeController {
 
   apply() {
     for (const lv of this.reg.levels) {
+      // Offset from the node's own resting height, by the level's tagged
+      // elevation. Multiplying the resting height instead only works while the
+      // two are the same number, which is true of our generator and not of an
+      // export where the LEVEL node sits at the origin and the geometry is
+      // baked at world height. In that case the floors would not move at all
+      // while pois.js flew their pins up regardless, since it has always
+      // offset by elevation.
       const base = this.base.get(lv.id) ?? lv.elevation;
-      lv.object.position.y = base * this.spread;
+      lv.object.position.y = base + lv.elevation * (this.spread - 1);
     }
     this.pois?.setExplode(this.spread, this.reg);
   }
 }
 
-/** Blends the camera from wherever it is to wherever a rig wants it. */
+/** Eases the camera from where it is to wherever the new rig has put it. */
 export class PoseBlend {
   constructor() {
     this.t = 1;

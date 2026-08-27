@@ -1,10 +1,10 @@
-# WalkthroughVisualizer — Tag Schema v0.1
+# WalkthroughVisualizer Tag Schema v0.1
 
 Status: **frozen for M1**. Breaking changes require a version bump and a `wv-cli` migration.
 
-Tags live in glTF `node.extras.wv`. Any node without `extras.wv` renders as plain geometry — a scene
-with zero tags is a valid scene. This is deliberate: artists tag incrementally and a missing tag
-never breaks a build.
+Tags live in glTF `node.extras.wv`. Any node without `extras.wv` renders as plain geometry, so a
+scene with zero tags is a valid scene. That lets artists tag incrementally, and it means a missing
+tag never breaks a build.
 
 ## 1. Common fields
 
@@ -17,7 +17,7 @@ Every tagged node may carry these. Only `type` is required.
 | `label` | string     | no       | Human-facing name. Falls back to a title-cased `id` leaf. |
 | `level` | string     | no       | Level key, e.g. `L00`. Inherited from the nearest ancestor `LEVEL` node if absent. |
 | `zone`  | string     | no       | `id` of the owning `ZONE`. Inherited from spatial containment if absent. |
-| `tags`  | string[]   | no       | Free-form filter keys — `public`, `staffed`, `accessible`, `type-a`. |
+| `tags`  | string[]   | no       | Free-form filter keys, such as `public`, `staffed`, `accessible`, `type-a`. |
 
 ### Inheritance
 
@@ -25,7 +25,7 @@ Resolution order for `level` and `zone`, first hit wins:
 
 1. Explicit value on the node.
 2. Nearest tagged ancestor in the glTF node hierarchy.
-3. Spatial containment — the `ZONE` volume whose AABB contains the node origin.
+3. Spatial containment: the `ZONE` volume whose AABB contains the node origin.
 4. Unset.
 
 ## 2. Node types
@@ -60,6 +60,8 @@ Use for furniture the player must not walk through, and for railings.
 |-------|----------|-------|
 | `height` | no | Metres. Defaults to the mesh AABB height. Overriding lets a low box block movement full-height. |
 
+Guided tour paths are relaxed off these volumes too, so the tour camera does not pass through them.
+
 ### `PORTAL`
 A doorway or opening between two zones. Author as a single quad filling the opening, facing either way.
 
@@ -69,10 +71,12 @@ A doorway or opening between two zones. Author as a single quad filling the open
 | `connects` | yes | `[zoneIdA, zoneIdB]`. |
 | `door` | no | `open` (default), `closed`, `locked`. `locked` removes the edge from the routing graph. |
 
-Drives room-to-room visibility culling and is an edge in the wayfinding graph.
+Drives room-to-room visibility culling and is an edge in the wayfinding graph. Guided tour paths
+are routed across the same graph, so a doorway with no `PORTAL` on it is a doorway tours will not
+use.
 
 ### `ZONE`
-A named region — a room, a corridor, a lobby. Author as a box volume, invisible at runtime.
+A named region such as a room, a corridor or a lobby. Author as a box volume, invisible at runtime.
 
 | Field | Required | Notes |
 |-------|----------|-------|
@@ -80,7 +84,7 @@ A named region — a room, a corridor, a lobby. Author as a box volume, invisibl
 | `label` | yes | |
 | `category` | no | `living`, `bedroom`, `kitchen`, `bath`, `balcony`, `circulation`, `amenity`, `department`. Drives the legend and plan-view colouring. |
 | `area` | no | Square metres. If absent, `wv-cli` computes it from the footprint. |
-| `parent` | no | `id` of an enclosing `ZONE` — a unit containing its rooms. |
+| `parent` | no | `id` of an enclosing `ZONE`, for example a unit containing its rooms. |
 
 `ZONE` produces: a room-directory entry, a minimap region, the "you are in" readout, and a plan-view
 label.
@@ -92,7 +96,7 @@ A point of interest. Author as an empty, or as a mesh whose centroid anchors the
 |-------|----------|-------|
 | `id` | yes | |
 | `label` | yes | |
-| `panel` | no | `{ body, media[], fields{} }` — the info card contents. |
+| `panel` | no | `{ body, media[], fields{} }`, the info card contents. |
 | `anchor` | no | `{ offset: [x,y,z] }` in metres, local space. Lifts the pin off the geometry. |
 | `icon` | no | Key into the preset's icon set. |
 
@@ -107,7 +111,7 @@ the options.
 | `id` | yes | |
 | `label` | yes | "Flooring", "Kitchen finish". |
 | `default` | no | `id` of the child to show first. Defaults to the first child. |
-| `scope` | no | `global` (default) or a `ZONE` id — limits the switcher to that room's UI. |
+| `scope` | no | `global` (default), or a `ZONE` id to limit the switcher to that room's UI. |
 
 Children carry `type: "VARIANT"` with `id`, `label`, and optional `swatch` (a hex colour or image path).
 
@@ -124,13 +128,13 @@ Children carry `type: "CAM_KEY"` with `order` (int), `label`, `dwell` (seconds a
 optional `look` (`id` of a node to face).
 
 ### `DEST`
-A wayfinding destination — hospital preset. Author as an empty at the arrival point.
+A wayfinding destination, hospital preset. Author as an empty at the arrival point.
 
 | Field | Required | Notes |
 |-------|----------|-------|
 | `id` | yes | |
 | `label` | yes | |
-| `keywords` | no | string[] — search synonyms. "Radiology", "X-ray", "Imaging". |
+| `keywords` | no | string[] of search synonyms. "Radiology", "X-ray", "Imaging". |
 | `dept` | no | Department key for grouping and colour. |
 | `accessible` | no | Boolean. Whether a step-free route exists. |
 

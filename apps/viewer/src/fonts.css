@@ -1,0 +1,18 @@
+/* Fonts ship with the build rather than loading from Google. A walkthrough
+   often runs on a kiosk in a sales lounge, or inside a client's iframe behind a
+   strict content policy, where a webfont that has to reach a third party is the
+   first thing to fail. The fallback stack also has different metrics, so text
+   reflows a moment after the scene appears. Latin subsets only, and only the
+   weights the interface asks for. */
+
+@import '@fontsource/montserrat/latin-600.css';
+@import '@fontsource/montserrat/latin-700.css';
+
+@import '@fontsource/source-sans-3/latin-400.css';
+@import '@fontsource/source-sans-3/latin-500.css';
+@import '@fontsource/source-sans-3/latin-600.css';
+
+@import '@fontsource/roboto-mono/latin-400.css';
+@import '@fontsource/roboto-mono/latin-500.css';
+
+@import '@fontsource/sora/latin-600.css';

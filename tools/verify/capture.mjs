@@ -1,11 +1,11 @@
 /**
  * Headless verification for the M1 vertical slice.
  *
- * Loads the built viewer in Chromium with SwiftShader, drives the runtime API
- * directly (no pointer lock in headless), and asserts the things that must never
- * silently regress: no console errors, the registry actually populated, the
- * player stands on a floor rather than falling, and walking forward does not
- * pass through a wall. Screenshots are a by-product for eyeballing the art.
+ * Runs the built viewer in Chromium on SwiftShader and drives window.wv
+ * directly, since headless gets no pointer lock. The checks cover console
+ * errors, the registry contents, and movement: the player has to rest on a
+ * slab, stop at a wall, fit through a door, climb a flight. Screenshots come
+ * out at the end so the art can be eyeballed.
  *
  *   node tools/verify/capture.mjs [--url http://localhost:4173/]
  */
@@ -19,14 +19,14 @@ const args = Object.fromEntries(
   process.argv.slice(2).map((a, i, arr) => a.startsWith('--') ? [a.slice(2), arr[i + 1]] : []).filter(Boolean),
 );
 
-// Either point at a running dev server, or hand over a built directory and let
-// the harness serve it. The second form is what CI uses — no background process,
-// no fixed port, no startup race.
+// --url points at a dev server that is already up. --serve hands a built
+// directory to the in-process server. CI uses --serve, so nothing is left
+// running once the harness exits.
 const SERVE_DIR = args.serve ?? (args.url ? null : 'apps/viewer/dist');
 let server = null;
 if (SERVE_DIR) {
   if (!existsSync(resolve(SERVE_DIR))) {
-    console.error(`\n  Nothing to serve at ${resolve(SERVE_DIR)} — run \`npm run build\` first.\n`);
+    console.error(`\n  Nothing to serve at ${resolve(SERVE_DIR)}. Run \`npm run build\` first.\n`);
     process.exit(2);
   }
   server = await serve(SERVE_DIR);
@@ -50,12 +50,12 @@ const SHOTS = [
   { name: '09-unitB',    level: 'L03',  pos: [6.9, 9.2, 2.5],   yaw: 2.36,       pitch: -0.08, tod: 'morning' },
   { name: '10-stair',    level: 'L01',  pos: [9.4, 3.2, 3.5],   yaw: -Math.PI / 2, pitch: 0.12, tod: 'noon' },
   { name: '11-terrace',  level: 'ROOF', pos: [6.0, 12.2, 5.0],  yaw: -1.9,       pitch: -0.06, tod: 'evening' },
-  // Free camera: position plus an explicit look target, so a shot can never end
-  // up buried inside a context block.
+  // Free camera. Position and look target are both explicit, so these two do
+  // not depend on where the player is standing.
   { name: '12-massing',  level: 'L00', free: [-24, 28, -34], look: [11, 7, 4], tod: 'evening' },
   { name: '13-approach', level: 'L00', free: [11, 2.2, -26], look: [11, 6, 0], tod: 'morning' },
-  // View modes drive themselves — the rig picks the framing, so these assert the
-  // mode's own default pose rather than a hand-placed camera.
+  // Mode shots carry no position. The rig picks the framing, and that default
+  // pose is what is under test.
   { name: '14-dollhouse', mode: 'dollhouse', level: 'L01', tod: 'noon' },
   { name: '15-plan-L01',  mode: 'plan',      level: 'L01', tod: 'noon' },
   { name: '16-exploded',  mode: 'exploded',  level: 'L01', tod: 'morning' },
@@ -65,8 +65,9 @@ const SHOTS = [
 const errors = [];
 const warnings = [];
 
-// The container ships a Chromium under PLAYWRIGHT_BROWSERS_PATH that may not match
-// the npm package's expected build number, so point at it explicitly.
+// The container's Chromium under PLAYWRIGHT_BROWSERS_PATH often carries a
+// build number the npm package does not expect, and playwright then refuses to
+// launch. Find the binary and pass the path in.
 function findChromium() {
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
   if (!existsSync(root)) return undefined;
@@ -92,9 +93,9 @@ const browser = await chromium.launch({
     '--ignore-gpu-blocklist', '--disable-dev-shm-usage',
   ],
 });
-// Start small. Draw-call and triangle counts do not depend on viewport size,
-// physics runs at a fixed timestep, and every pixel costs real seconds on a
-// software rasteriser. The viewport is scaled up later, for screenshots only.
+// 1024x640 for the checks. Every pixel costs real seconds on a software
+// rasteriser, and nothing checked here depends on viewport size, because the
+// physics runs at a fixed timestep. The screenshot pass resizes later.
 const page = await browser.newPage({ viewport: { width: 1024, height: 640 }, deviceScaleFactor: 1 });
 
 page.on('console', (m) => {
@@ -161,14 +162,17 @@ const physics = await page.evaluate(async () => {
   const wv = window.wv;
   const out = {};
 
-  // SwiftShader renders at roughly one frame per second, so wall-clock stepping
-  // would test the rasteriser rather than the movement code. Drive the player
-  // at a fixed timestep instead — deterministic, and independent of the GPU.
+  // SwiftShader manages about one frame a second, so stepping the player on
+  // real frames would measure the rasteriser. Fixed 1/60 steps give the same
+  // distances on any machine.
   const step = (n, dt = 1 / 60) => { for (let i = 0; i < n; i++) wv.player.update(dt); };
 
   wv.setLevel('L01', { teleport: false });
   wv.player.enabled = true;
-  wv.player.locked = true;
+  // Walking only runs while a look drag is active, which on desktop means the
+  // right mouse button is held. There is no real pointer here, so set the flag
+  // beginDrag would set and skip the pointer capture and lock requests.
+  wv.player.dragging = true;
 
   // 1. Stand in Unit A's living room and settle.
   wv.player.teleport(16.2, 3.4, 3.4, 0);
@@ -191,8 +195,8 @@ const physics = await page.evaluate(async () => {
   out.wallEndY = wv.player.position.y;
   out.wallTravelled = startX - wv.player.position.x;
 
-  // 3. Walk through the living-room door into the kitchen — a portal must be
-  //    passable, or the whole tagging contract is worthless.
+  // 3. Walk from the living room through to the kitchen. A tagged portal you
+  //    cannot walk through means the tagging went wrong upstream.
   wv.player.teleport(16.4, 3.4, 2.55, 0);
   step(10);
   wv.player.yaw = -Math.PI / 2;              // face +X toward the kitchen door
@@ -217,12 +221,12 @@ const physics = await page.evaluate(async () => {
   // 5. Park back in the living room for the zone check below.
   wv.player.teleport(16.2, 3.4, 3.4, 0);
   step(10);
-  wv.player.locked = false;
+  wv.player.dragging = false;
   return out;
 });
 
-// One explicit frame drives the zone readout, so this does not race the
-// (very slow) software rasteriser's own animation loop.
+// Pump one frame by hand. The zone readout updates in frame(), and waiting for
+// the render loop to get there costs a second or more per frame.
 const zoneProbe = await page.evaluate(() => {
   window.wv.frame();
   return window.wv.currentZone ? window.wv.currentZone.label : null;
@@ -253,7 +257,6 @@ const modes = await page.evaluate(async () => {
     for (let i = 0; i < n; i++) { wv.rig.update(1 / 60); wv.explode.update(1 / 60); }
   };
 
-  out.modeIds = Object.keys(window.wv.constructor === Object ? {} : {});
 
   // Dollhouse: rig should frame the whole site from outside it.
   wv.setViewMode('dollhouse', { animate: false });
@@ -327,8 +330,44 @@ check('tour pause holds time', modes.pauseHolds === true);
 check('tour reports finished', modes.finishes === true);
 check('player resumes after tour', modes.playerBackAfterTour === true);
 
-// The switcher must mark exactly one mode — a stale `.on` would leave the
-// viewer unable to tell which view they are actually in.
+// The tour used to fly through walls. Screenshots never caught it: the failure
+// is about a second of camera inside a bedroom wall halfway along a leg, and
+// the stops themselves look fine. Sample each curve at 400 points instead and
+// test every point against the collision volumes the player already uses.
+const tourPaths = await page.evaluate(() => {
+  const wv = window.wv;
+  const blocks = wv.reg.navBlocks;
+  const hits = (p, pad) => blocks.some((b) =>
+    p.x > b.min.x - pad && p.x < b.max.x + pad
+    && p.y > b.min.y - pad && p.y < b.max.y + pad
+    && p.z > b.min.z - pad && p.z < b.max.z + pad);
+  const N = 400;
+  const out = [];
+  for (const tour of wv.reg.tours) {
+    wv.startTour(tour.id);
+    const t = wv.tourPlayer;
+    let solid = 0;
+    let worst = null;
+    for (let i = 0; i <= N; i++) {
+      const p = t.curve.getPointAt(i / N);
+      if (hits(p, 0)) {
+        solid++;
+        if (!worst) worst = `${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}`;
+      }
+    }
+    wv.stopTour();
+    out.push({ id: tour.id, pct: (100 * solid) / (N + 1), worst });
+  }
+  return out;
+});
+const throughWalls = tourPaths.filter((t) => t.pct > 0);
+check('no tour passes through geometry', throughWalls.length === 0,
+  throughWalls.length
+    ? `${throughWalls[0].id} spends ${throughWalls[0].pct.toFixed(1)}% inside a block, first at (${throughWalls[0].worst})`
+    : `${tourPaths.length} tours clear`);
+
+// Exactly one mode button carries `.on`. A stale one lights two buttons at
+// once, and then nothing on screen says which view you are in.
 const switcher = await page.evaluate(() => {
   const wv = window.wv;
   const read = () => ({
@@ -352,6 +391,51 @@ check('one view mode marked active',
   && switcher.c.views.join() === 'walk',
   `${switcher.a.views}|${switcher.b.views}|${switcher.c.views}`);
 check('one level marked active', switcher.c.levels.length === 1, switcher.c.levels.join());
+
+// --------------------------------------------------------------------------- //
+// Pipeline output
+// --------------------------------------------------------------------------- //
+
+const pipeline = await page.evaluate(async () => {
+  const wv = window.wv;
+  // wv-cli bakes tag volumes to AABBs and drops the meshes. A volume mesh
+  // still in the scene means the build step was skipped.
+  let volumeMeshes = 0;
+  let taggedNodes = 0;
+  wv.root.traverse((o) => {
+    const t = o.userData?.wv;
+    if (!t?.type) return;
+    taggedNodes++;
+    if (['ZONE', 'NAV_FLOOR', 'NAV_BLOCK', 'PORTAL'].includes(t.type) && o.isMesh) volumeMeshes++;
+  });
+  const res = await fetch('./content/kp-tower/project.json');
+  const project = res.ok ? await res.json() : null;
+  return {
+    taggedNodes,
+    volumeMeshes,
+    zoneBoxesNonEmpty: wv.reg.zones.filter((z) => !z.box.isEmpty()).length,
+    project,
+  };
+});
+
+check('tag volumes baked to AABBs', pipeline.volumeMeshes === 0,
+  `${pipeline.volumeMeshes} volumes still carry a mesh`);
+check('zone boxes survived the bake', pipeline.zoneBoxesNonEmpty === reg.zones,
+  `${pipeline.zoneBoxesNonEmpty} / ${reg.zones} non-empty`);
+check('project.json ships and agrees with the scene',
+  !!pipeline.project && pipeline.project.counts.zones === reg.zones
+  && pipeline.project.counts.pois === reg.pois
+  && pipeline.project.levels.length === reg.levels.length,
+  pipeline.project
+    ? `zones ${pipeline.project.counts.zones}, pois ${pipeline.project.counts.pois}, levels ${pipeline.project.levels.length}`
+    : 'missing');
+// Scene assets only. The UI logo PNGs live outside /content/, so they do not
+// count against the single-file rule.
+const sceneSideloads = [...okUrls].filter(
+  (u) => u.includes('/content/') && !/\.(glb|json)$/i.test(u),
+);
+check('scene ships as one self-contained file', sceneSideloads.length === 0,
+  sceneSideloads.slice(0, 2).join(' | ') || 'scene.glb + project.json only');
 
 // --------------------------------------------------------------------------- //
 // Perf sample
@@ -383,20 +467,21 @@ const perf = await page.evaluate(async (frameCount) => {
     geometries: wv.renderer.info.memory.geometries,
   };
 }, Number(args['perf-frames'] ?? 8));
-// Eight frames, not ninety. The draw-call and triangle counts settle on the
-// first frame, and the timings are software-rasteriser noise either way — the
-// long sample was costing minutes of CI to measure nothing.
+// Eight frames is enough. The draw-call and triangle counts settle on the first
+// frame, and the timings are rasteriser noise. The old 90-frame sample spent
+// minutes of CI measuring nothing.
 
-// SwiftShader is a software rasteriser — absolute timings mean nothing here.
-// Draw calls and triangle counts are the numbers that carry to real hardware.
+// Only the counts are asserted. Timings off a software rasteriser say nothing
+// about a phone. Draw calls and triangles carry across to real hardware.
 check('draw calls within budget', perf.drawCalls <= 150, `${perf.drawCalls} / 150`);
 check('triangles within budget', perf.triangles <= 180000, `${perf.triangles} / 180000`);
 
 // --------------------------------------------------------------------------- //
-// Mobile pass — a real touch context, not a narrow desktop window
+// Mobile pass
 //
-// `isTouchDevice()` is read once at module load, so the only honest way to test
-// the phone build is a second browser context that actually reports touch.
+// `isTouchDevice()` is read once at module load, so resizing the desktop page
+// proves nothing about the phone build. This needs a second browser context
+// that reports touch from the start.
 // --------------------------------------------------------------------------- //
 
 let mobile = { skipped: true };
@@ -412,8 +497,8 @@ const mpage = await mctx.newPage();
 const mobileErrors = [];
 mpage.on('pageerror', (e) => mobileErrors.push(e.message));
 try {
-  // Both pages rasterise in software on the same CPU. Leaving the desktop render
-  // loop running starves the phone context and it never finishes its first frame.
+  // Both pages rasterise in software on the same CPU. Leave the desktop render
+  // loop running and the phone context never finishes its first frame.
   await page.evaluate(() => window.wv?.stop());
   await mpage.goto(URL_BASE, { waitUntil: 'networkidle' });
   await mpage.waitForFunction(() => window.wv && window.wv.reg, null, { timeout: 120000 });
@@ -426,8 +511,7 @@ try {
     out.bodyTouchClass = document.body.classList.contains('touch');
     out.crosshairHidden = getComputedStyle(document.getElementById('crosshair')).display === 'none';
 
-    // Drive the virtual stick the way a thumb would: press in the lower-left
-    // zone, drag up, and confirm the player receives forward analog input.
+    // Press in the lower-left zone and drag upward, the way a thumb would.
     const canvas = document.querySelector('#stage canvas');
     const r = canvas.getBoundingClientRect();
     const ox = r.left + r.width * 0.18;
@@ -441,7 +525,7 @@ try {
     out.analogForward = wv.player.analog.y;      // negative is forward
     out.analogSide = wv.player.analog.x;
 
-    // Walking must actually move the player, using the same fixed-step drive.
+    // Step the player too. Analog input arriving does not prove it moves anything.
     wv.player.enabled = true;
     const before = wv.player.position.clone();
     for (let i = 0; i < 90; i++) wv.player.update(1 / 60);
@@ -476,17 +560,18 @@ try {
 }
 
 // --------------------------------------------------------------------------- //
-// Report the checks BEFORE anything slow
+// Print the checks before anything slow
 //
-// Screenshots are the expensive part and they run on a software rasteriser, so
-// they must never be able to swallow the diagnostic output. Everything that can
-// fail the build is decided and printed here.
+// The screenshot pass can hit the job timeout on a GPU-less runner. Taken
+// first, a timeout there kills the run with no diagnostics printed at all.
+// Everything that can fail the build is decided and printed here.
 // --------------------------------------------------------------------------- //
 
-// Google Fonts is unreachable from a sandboxed runner; that is the environment,
-// not the app. A URL that also came back 2xx is not a failure either — Chromium
-// reports ERR_ABORTED for duplicate and speculative requests that it cancels
-// itself, and the asset still arrived.
+// Two kinds of noise get filtered out of the request log. Google Fonts is
+// unreachable from a sandboxed runner, so a failure there is the environment.
+// A URL that also came back 2xx is fine: Chromium logs ERR_ABORTED for
+// speculative and duplicate requests it cancels itself, long after the asset
+// arrived.
 const EXTERNAL = /fonts\.(googleapis|gstatic)\.com/;
 const appFailures = failedUrls.filter((entry) => {
   const url = entry.split(' :: ')[0];
@@ -499,6 +584,30 @@ const realErrors = errors.filter(
 check('no failed app requests', appFailures.length === 0, appFailures.slice(0, 3).join(' | '));
 check('no console errors', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
+// The panel is populated from a POI's extras and there was nothing covering
+// it, while the screenshot that claimed to show it was shooting an empty room.
+// Driving the poiTap event is the same path a tap on a marker takes, and the
+// ?poi= deep link at boot ends up in the same openPoi call, so this covers
+// both without a reload. A reload is not worth it here: under SwiftShader the
+// page never reaches network idle inside a sane timeout.
+const poiPanel = await page.evaluate(async () => {
+  const wv = window.wv;
+  const poi = wv.reg.poiById.get('l01.a.poi.kitchen');
+  if (!poi) return { open: false, title: '', body: 0, fields: 0, err: 'no such poi' };
+  wv.emit('poiTap', { poi });
+  await new Promise((r) => setTimeout(r, 60));
+  return {
+    open: !document.getElementById('poi').classList.contains('hidden'),
+    title: document.getElementById('poi-title').textContent.trim(),
+    body: document.getElementById('poi-body').textContent.trim().length,
+    fields: document.getElementById('poi-fields').children.length,
+  };
+}).catch((err) => ({ open: false, title: '', body: 0, fields: 0, err: err.message.split('\n')[0] }));
+check('poi panel opens and fills',
+  poiPanel.open && poiPanel.title.length > 2 && poiPanel.body > 20 && poiPanel.fields >= 2,
+  poiPanel.err || `${poiPanel.open ? 'open' : 'closed'}, "${poiPanel.title}", `
+    + `${poiPanel.body} chars, ${poiPanel.fields} field nodes`);
+
 const pad = (str, n) => String(str).padEnd(n);
 console.log('\n  M1 verification\n  ' + '-'.repeat(64));
 for (const c of checks) {
@@ -507,23 +616,23 @@ for (const c of checks) {
 console.log('  ' + '-'.repeat(64));
 console.log(`  scene    ${reg.zones} zones · ${reg.pois} POIs · ${reg.portals} portals · ${reg.navBlocks} collision volumes`);
 console.log(`  render   ${perf.drawCalls} draw calls · ${perf.triangles} triangles · ${perf.programs} programs`);
-console.log(`  frames   median ${perf.medianMs.toFixed(1)}ms over ${perf.sampled} (software raster — indicative only)`);
+console.log(`  frames   median ${perf.medianMs.toFixed(1)}ms over ${perf.sampled} (software raster, indicative only)`);
 if (reg.warnings.length) console.log(`  warnings ${reg.warnings.length} (see report.json)`);
 
 const failed = checks.filter((c) => !c.ok);
 console.log(`\n  ${checks.length - failed.length}/${checks.length} checks passed`);
 
 // --------------------------------------------------------------------------- //
-// Screenshots — a human artifact, bounded and non-fatal
+// Screenshots: for humans, bounded and non-fatal
 //
 // On a GPU-less runner a single 1440x900 WebGL frame can exceed Playwright's
-// screenshot timeout. Low quality shrinks the viewport and drops shadows, which
-// is the difference between reliable pictures and none at all. A shot that fails
-// is reported, never thrown — a slow rasteriser is not a regression.
+// screenshot timeout. Low quality shrinks the viewport and drops shadows, and
+// that is the difference between getting pictures and getting none. A shot that
+// fails is reported and never thrown. A slow rasteriser is not a regression.
 // --------------------------------------------------------------------------- //
 
 const SHOT_QUALITY = args['shots'] ?? 'full';         // full | low | off
-const SHOT_BUDGET_MS = Number(args['shot-budget'] ?? 240000);
+const SHOT_BUDGET_MS = Number(args['shot-budget'] ?? 480000);
 const shotResults = { taken: [], failed: [], skipped: [] };
 
 if (SHOT_QUALITY !== 'off') {
@@ -539,7 +648,7 @@ if (SHOT_QUALITY !== 'off') {
     await page.setViewportSize({ width: 1280, height: 800 });
   }
 
-  // Dismiss the entry overlays so the shots show the scene, not the splash.
+  // Dismiss the entry overlays so the shots show the scene behind them.
   await page.evaluate(() => {
     for (const id of ['loader', 'start']) document.getElementById(id).classList.add('hidden');
   });
@@ -560,7 +669,7 @@ if (SHOT_QUALITY !== 'off') {
       if (setup) await setup();
       await settle(frames);
       // The DOM paints on its own schedule, so a class change that started a
-      // CSS transition can still be mid-fade when the WebGL frames have landed.
+      // CSS transition can still be mid-fade once the WebGL frames have landed.
       await page.waitForTimeout(220);
       await page.screenshot({ path: `${OUT}/${name}.png`, timeout: 60000 });
       shotResults.taken.push(name);
@@ -575,14 +684,14 @@ if (SHOT_QUALITY !== 'off') {
       wv.setTimeOfDay(shot.tod);
 
       if (shot.mode) {
-        // A mode shot asserts the rig's own framing, not a hand-placed camera.
+        // A mode shot tests the framing the rig picks for itself.
         wv.setViewMode('walk', { animate: false });
         wv.setLevel(shot.level, { teleport: false });
         wv.setViewMode(shot.mode, { animate: false });
         if (typeof shot.azimuth === 'number') wv.rig.desiredAzimuth = shot.azimuth;
         if (typeof shot.elevation === 'number') wv.rig.desiredElevation = shot.elevation;
-        // Settle rig and explode at a fixed timestep — real frames are far too
-        // slow here to let either animation converge.
+        // Settle rig and explode at a fixed timestep. Real frames are far too
+        // slow here for either animation to converge.
         for (let i = 0; i < 400; i++) { wv.rig.update(1 / 60); wv.explode.update(1 / 60); }
         wv.blend.t = 1;
         wv.camera.position.copy(wv.rig.pose());
@@ -617,15 +726,23 @@ if (SHOT_QUALITY !== 'off') {
     document.getElementById('btn-rooms').click();
   }));
 
+  // Through the ?poi= deep link, which is how a sales team actually shares one
+  // of these: paste a link, land in front of the fitting with its panel open.
+  // The old version of this shot moved the camera and set a hover but never
+  // opened the drawer, so for months it was quietly shooting an empty room.
   await shoot('19-poi-panel', () => page.evaluate(() => {
-    document.getElementById('btn-rooms').click();
     const wv = window.wv;
-    const poi = wv.reg.poiById.get('l01.a.kitchen');
-    wv.goToPoi('l01.a.kitchen');
+    wv.setViewMode('walk', { animate: false });
+    wv.blend.t = 1;
+    wv.setLevel('L01');
+    wv.setTimeOfDay('noon');
+    const poi = wv.reg.poiById.get('l01.a.poi.kitchen');
+    wv.goToPoi('l01.a.poi.kitchen');
     wv.pois.setHovered(poi);
+    wv.emit('poiTap', { poi });
   }), 3);
 
-  // Phone shots, from the touch context that is already loaded.
+  // Phone shots, taken in the touch context that is already loaded.
   const mobileShots = [
     { name: '20-mobile-start', setup: null },
     { name: '21-mobile-walk', setup: () => mpage.evaluate(() => {

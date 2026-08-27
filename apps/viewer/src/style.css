@@ -1,93 +1,160 @@
+@import './fonts.css';
+
 :root{
+  /* -- colour ------------------------------------------------------------ */
   --ink:#F0EEE8;
   --ink-dim:#A7ADA6;
-  --glass:rgba(20,24,26,.74);
-  --glass-2:rgba(28,33,36,.88);
+  /* The panels float over a render that can be a white facade at noon. At the
+     old .74 alpha the dim ink measured 3.3:1 against that worst case. .82 puts
+     it at 4.7:1 and still reads as glass over a dark stairwell. */
+  --glass:rgba(16,20,22,.82);
+  --glass-2:rgba(18,22,24,.92);
   --line:rgba(240,238,232,.14);
-  --line-2:rgba(240,238,232,.28);
+  --line-2:rgba(240,238,232,.30);
+  /* One accent, three jobs. E8563C stays the mark colour for rules, ticks and
+     progress. White on it is 3.6:1, so filled controls take the deeper tone.
+     E8563C as text on glass is 3.0:1, so accent text takes the lighter one. */
   --accent:#E8563C;
-  --teal:#6FB0AC;
-  --ok:#8CBF7A;
-  --warn:#E0B453;
-  --display:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
-  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
-  --pad:14px;
+  --accent-fill:#CE4029;
+  --accent-soft:#FF8A70;
+  --teal:#8CC6C2;
+  --ok:#A6D492;
+  --warn:#EFC96B;
+
+  /* -- type -------------------------------------------------------------- */
+  /* Montserrat carries the headings and anything that needs presence. Source
+     Sans handles running text and controls; it stays readable at 12px over a
+     moving 3D image. Roboto Mono is for numbers and small caps labels where the
+     columns have to line up. Sora is only for the studio wordmark. */
+  --display:'Montserrat',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --ui:'Source Sans 3','Source Sans Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Roboto Mono',ui-monospace,Menlo,monospace;
+  --brand:'Sora',var(--display);
+  /* Seven steps, no half pixels. Anything smaller than 10px is unreadable at
+     arm's length on a sales-lounge kiosk. */
+  --t-2xs:10px;
+  --t-xs:11px;
+  --t-sm:12px;
+  --t-md:13px;
+  --t-base:14px;
+  --t-lg:15px;
+  --t-xl:17px;
+  --track-caps:.14em;  /* every uppercase micro label */
+  --track-num:.02em;   /* mono readouts; tabular figures already align */
+
+  /* -- space and shape --------------------------------------------------- */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+  /* Radii nest: a 10px panel with 4px padding wants 6px children. */
+  --r-xs:4px; --r-sm:6px; --r-md:10px; --r-lg:14px;
+  --pad:16px;
+  --ctl:36px;          /* control height with a mouse */
+  --tap:44px;          /* control height with a thumb */
+  --drawer-w:340px;
+  --shadow-1:0 2px 8px rgba(0,0,0,.30), 0 10px 30px rgba(0,0,0,.22);
+  --shadow-2:0 18px 50px rgba(0,0,0,.52);
+
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
-  --tap:44px;
 }
 
 *{box-sizing:border-box}
 html,body{height:100%; overscroll-behavior:none}
 body{
   margin:0; background:#14181A; color:var(--ink);
-  font-family:var(--display); font-size:14px; overflow:hidden;
+  font-family:var(--ui); font-size:var(--t-base); overflow:hidden;
   -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent;
   touch-action:none; user-select:none;
 }
 #stage{position:fixed; inset:0}
 #stage canvas{display:block; width:100%; height:100%; touch-action:none}
+/* Pointer lock hides the cursor on its own, but when a browser refuses the
+   lock the drag still runs on pointer capture, and then a cursor slides across
+   the view while the camera turns. */
+body.dragging #stage{cursor:none}
 .hidden{display:none !important}
-.mono{font-family:var(--mono)}
+.mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
 button{font-family:inherit; color:inherit; cursor:pointer; border:0; background:none}
-button:focus-visible,[role=slider]:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 img{display:block}
 
+/* A white ring reads on glass and on the accent fill; the black halo carries it
+   over whatever the render happens to be showing behind. */
+button:focus-visible,[role=slider]:focus-visible,[tabindex]:focus-visible{
+  outline:2px solid #F7F5F0; outline-offset:2px;
+  box-shadow:0 0 0 4px rgba(0,0,0,.6);
+}
+/* Rings on children of a scroll container get clipped, so tuck them inside. */
+#views button:focus-visible,#levels button:focus-visible,
+#rooms-list button:focus-visible,.tour-chapters button:focus-visible{
+  outline-offset:-3px;
+}
+
 .panel-chrome{
-  background:var(--glass); border:1px solid var(--line); border-radius:5px;
-  backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
+  background:var(--glass); border:1px solid var(--line); border-radius:var(--r-md);
+  box-shadow:var(--shadow-1);
+  backdrop-filter:blur(12px) saturate(1.2); -webkit-backdrop-filter:blur(12px) saturate(1.2);
 }
 .icon-btn{
-  display:grid; place-items:center; width:30px; height:30px; border-radius:4px;
-  color:var(--ink-dim); transition:background .12s ease, color .12s ease;
+  display:grid; place-items:center; width:var(--ctl); height:var(--ctl);
+  border-radius:var(--r-sm); color:var(--ink-dim);
+  transition:background .12s ease, color .12s ease;
 }
-.icon-btn:hover{background:rgba(255,255,255,.09); color:var(--ink)}
+.icon-btn:hover{background:rgba(255,255,255,.10); color:var(--ink)}
+/* A standalone icon button is its own panel: panel radius, and the same 44px
+   as a grouped cluster measures on the outside. */
+.icon-btn.panel-chrome{width:var(--tap); height:var(--tap); border-radius:var(--r-md)}
 
 /* ------------------------------------------------------------- overlays -- */
 .overlay{
   position:fixed; inset:0; z-index:60; display:grid; place-items:center;
   background:radial-gradient(120% 90% at 50% 38%, #1C2226 0%, #0D1113 72%);
-  padding:calc(24px + var(--safe-t)) 24px calc(24px + var(--safe-b));
+  padding:calc(var(--s5) + var(--safe-t)) var(--s5) calc(var(--s5) + var(--safe-b));
 }
 .intro{width:min(460px,100%); text-align:left}
 #intro-logo{
-  width:132px; height:auto; margin-bottom:18px;
+  width:132px; height:auto; margin-bottom:var(--s4);
   animation:rise .7s cubic-bezier(.2,.8,.3,1) both;
 }
-.mini-logo{width:52px; height:auto; margin-bottom:12px; opacity:.9}
-@keyframes rise{from{opacity:0; transform:translateY(10px) scale(.97)}to{opacity:1; transform:none}}
+.mini-logo{width:52px; height:auto; margin-bottom:var(--s3); opacity:.9}
+/* Entrances move, they never fade in. A keyframe starting at opacity 0 leaves
+   the element invisible for as long as the animation clock has not ticked, and
+   it does not tick on the frame after a heavy scene load. */
+@keyframes rise{from{transform:translateY(10px) scale(.97)}to{transform:none}}
 .studio{
-  font-family:var(--mono); font-size:11px; letter-spacing:.28em; text-transform:uppercase;
-  color:var(--ink); margin:0 0 20px; font-weight:500;
+  font-family:var(--brand); font-size:var(--t-xs); letter-spacing:.24em;
+  text-transform:uppercase; color:var(--ink); margin:0 0 var(--s5); font-weight:600;
 }
-.studio.small{font-size:9.5px; letter-spacing:.24em; color:var(--ink-dim); margin-bottom:16px}
-.intro-rule{height:1px; background:var(--line-2); margin:0 0 20px; max-width:120px}
+.studio.small{font-size:var(--t-2xs); letter-spacing:.2em; color:var(--ink-dim); margin-bottom:var(--s4)}
+.intro-rule{height:1px; background:var(--line-2); margin:0 0 var(--s5); max-width:120px}
 .intro h1{
-  font-size:clamp(32px,7vw,46px); font-weight:700; letter-spacing:-.022em;
-  margin:0 0 8px; line-height:1.02; text-wrap:balance;
+  font-family:var(--display);
+  font-size:clamp(30px,6.4vw,43px); font-weight:700; letter-spacing:-.02em;
+  margin:0 0 var(--s2); line-height:1.06; text-wrap:balance;
 }
-.sub{color:var(--ink-dim); margin:0 0 24px; font-size:15px; line-height:1.6}
+.sub{color:var(--ink-dim); margin:0 0 var(--s5); font-size:var(--t-lg); line-height:1.6}
 .sub b,.sub kbd{color:var(--ink); font-weight:600; font-family:inherit}
 .sub kbd{
-  background:rgba(255,255,255,.09); border:1px solid var(--line); border-radius:3px;
-  padding:1px 5px; font-size:12px; font-family:var(--mono);
+  background:rgba(255,255,255,.10); border:1px solid var(--line-2); border-radius:var(--r-xs);
+  padding:1px 5px; font-size:var(--t-xs); font-family:var(--mono);
 }
-.bar{height:2px; background:rgba(240,238,232,.13); border-radius:2px; overflow:hidden}
+.bar{height:3px; background:rgba(240,238,232,.16); border-radius:999px; overflow:hidden}
 #bar-fill{height:100%; width:0%; background:var(--accent); transition:width .22s ease}
 .status{
-  font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:var(--ink-dim); margin:12px 0 0;
+  font-family:var(--mono); font-size:var(--t-xs); letter-spacing:var(--track-num);
+  color:var(--ink-dim); margin:var(--s3) 0 0;
 }
+.status.error{color:var(--accent-soft)}
 button.primary{
-  display:block; width:100%; margin:0 0 10px; padding:15px 22px; background:var(--accent);
-  border-radius:4px; font-weight:600; font-size:15px; color:#fff;
+  display:block; width:100%; margin:0 0 var(--s2); padding:15px 22px;
+  background:var(--accent-fill); border-radius:var(--r-md);
+  font-weight:600; font-size:var(--t-lg); color:#fff;
   transition:filter .12s ease, transform .12s ease; min-height:var(--tap);
 }
-button.primary:hover{filter:brightness(1.08); transform:translateY(-1px)}
+button.primary:hover{filter:brightness(1.1); transform:translateY(-1px)}
 button.ghost{
   display:block; width:100%; padding:13px 22px; border:1px solid var(--line-2);
-  border-radius:4px; font-weight:500; font-size:14px; color:var(--ink-dim);
+  border-radius:var(--r-md); font-weight:500; font-size:var(--t-base); color:var(--ink-dim);
   transition:border-color .12s ease, color .12s ease; min-height:var(--tap);
 }
 button.ghost:hover{border-color:var(--ink-dim); color:var(--ink)}
@@ -96,165 +163,224 @@ button.ghost:hover{border-color:var(--ink-dim); color:var(--ink)}
 #hud-top{
   position:fixed; top:calc(var(--pad) + var(--safe-t));
   left:calc(var(--pad) + var(--safe-l)); right:calc(var(--pad) + var(--safe-r));
-  z-index:20; display:grid; grid-template-columns:1fr auto 1fr; align-items:start; gap:12px;
-  pointer-events:none;
+  z-index:20; display:grid; grid-template-columns:1fr auto 1fr; align-items:start;
+  gap:var(--s3); pointer-events:none;
 }
-.brand{display:flex; gap:10px; align-items:center; pointer-events:auto; min-width:0}
-.brand img{width:30px; height:auto; flex:none; opacity:.95}
-.brand p{margin:0; font-size:13.5px; font-weight:600; letter-spacing:-.005em;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.studio-line{font-size:9.5px; color:var(--ink-dim); letter-spacing:.16em;
-  text-transform:uppercase; margin-top:2px !important; font-weight:500}
+/* Identity and "where am I" are one column, not two floaters. Both panels share
+   a left edge and a minimum width so the corner reads as a single object. */
+/* max-content plus stretch gives both panels the width of the wider one, so the
+   column has a single right edge instead of a ragged one. */
+.hud-left{display:flex; flex-direction:column; align-items:stretch; gap:var(--s2);
+  width:max-content; max-width:min(300px,100%); min-width:0}
+.hud-left > *{min-width:190px}
+/* The brand used to sit straight on the render with only a text shadow, which
+   left the studio line at about 1:1 against a sunlit facade. It gets the same
+   glass as everything else so a client's wordmark is always crisp. */
+.brand{display:flex; gap:var(--s2); align-items:center; padding:8px 12px; min-width:0}
+.brand img{width:28px; height:auto; flex:none; opacity:.95}
+.brand div{min-width:0}
+.brand p{margin:0; font-family:var(--display); font-size:var(--t-md); font-weight:600;
+  letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.studio-line{font-family:var(--brand); font-size:var(--t-2xs); color:var(--ink-dim);
+  letter-spacing:var(--track-caps); text-transform:uppercase; margin-top:2px !important;
+  font-weight:600}
 
-#views{display:flex; padding:4px; gap:2px; pointer-events:auto; justify-self:center}
+#views{display:flex; padding:var(--s1); gap:2px; pointer-events:auto; justify-self:center}
 #views button{
-  padding:8px 14px; border-radius:4px; font-size:12.5px; font-weight:500; color:var(--ink-dim);
-  transition:background .14s ease, color .14s ease; white-space:nowrap; min-height:34px;
+  padding:0 14px; border-radius:var(--r-sm); font-size:var(--t-md); font-weight:500;
+  color:var(--ink-dim); transition:background .14s ease, color .14s ease;
+  white-space:nowrap; min-height:var(--ctl); display:flex; align-items:center; gap:7px;
 }
-#views button:hover{background:rgba(255,255,255,.08); color:var(--ink)}
-#views button.on{background:var(--accent); color:#fff}
-#views button .k{
-  font-family:var(--mono); font-size:9px; opacity:.5; margin-left:6px;
-}
-#views button.on .k{opacity:.7}
+#views button:hover{background:rgba(255,255,255,.09); color:var(--ink)}
+#views button.on{background:var(--accent-fill); color:#fff}
+/* The keycap is a hint, not decoration. It was at .5 opacity, which put it
+   under 2:1 on the panel, so the hierarchy comes from size instead. */
+#views button .k{font-family:var(--mono); font-size:var(--t-2xs); letter-spacing:var(--track-num)}
+#views button.on .k{color:#fff}
 
-.top-right{display:flex; gap:6px; align-items:flex-start; justify-self:end; pointer-events:auto}
+.top-right{display:flex; gap:var(--s2); align-items:flex-start; justify-self:end; pointer-events:auto}
 #stats{
-  display:flex; gap:11px; align-items:center; padding:7px 11px; font-size:10.5px;
-  letter-spacing:.05em; color:var(--ink-dim); font-variant-numeric:tabular-nums;
+  display:flex; gap:var(--s3); align-items:center; padding:0 12px; min-height:var(--tap);
+  font-size:var(--t-xs); letter-spacing:var(--track-num); color:var(--ink-dim);
+  font-variant-numeric:tabular-nums; pointer-events:none;
 }
 #stats b{color:var(--ink); font-weight:500; margin-right:3px}
-.badge{padding:2px 6px; border-radius:2px; font-size:9px; letter-spacing:.1em; text-transform:uppercase}
-.badge.ok{background:rgba(140,191,122,.16); color:var(--ok)}
-.badge.warn{background:rgba(224,180,83,.16); color:var(--warn)}
+.badge{padding:3px 7px; border-radius:var(--r-xs); font-size:var(--t-2xs);
+  letter-spacing:.1em; text-transform:uppercase}
+.badge.ok{background:rgba(166,212,146,.16); color:var(--ok)}
+.badge.warn{background:rgba(239,201,107,.16); color:var(--warn)}
 
 /* --------------------------------------------------- crosshair + hover -- */
 #crosshair{position:fixed; inset:0; display:grid; place-items:center; z-index:15; pointer-events:none}
 #crosshair span{
-  width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.6);
-  box-shadow:0 0 0 1.5px rgba(0,0,0,.35); transition:transform .14s ease, background .14s ease;
+  width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.85);
+  box-shadow:0 0 0 2px rgba(0,0,0,.45); transition:transform .14s ease, background .14s ease;
 }
 body.aiming #crosshair span{transform:scale(1.9); background:var(--accent)}
-body:not(.mode-walk) #crosshair,body.touch #crosshair{display:none}
+/* The crosshair only makes sense during a drag. The cursor is visible the rest
+   of the time, and showing both gives you two things to aim with. */
+body:not(.mode-walk) #crosshair,body.touch #crosshair,body:not(.dragging) #crosshair{display:none}
+#control-hint{
+  position:fixed; left:50%; top:calc(50% + 64px); transform:translateX(-50%);
+  z-index:16; margin:0; pointer-events:none; white-space:nowrap;
+  padding:10px 16px; border-radius:var(--r-md); font-size:var(--t-md); color:var(--ink);
+  background:var(--glass-2); border:1px solid var(--line); box-shadow:var(--shadow-1);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  animation:hint-in .5s cubic-bezier(.2,.8,.3,1) both;
+}
+#control-hint b{font-weight:600; color:var(--accent-soft)}
+@keyframes hint-in{from{transform:translateX(-50%) translateY(6px)}
+  to{transform:translateX(-50%)}}
+/* The hint is about the mouse, so it has nothing to say to a phone or to a
+   camera the viewer is not driving. */
+body.touch #control-hint,body:not(.mode-walk) #control-hint,
+body.dragging #control-hint,body.touring #control-hint{display:none}
+
 #hover-label{
-  position:fixed; left:50%; top:calc(50% + 26px); transform:translateX(-50%);
-  z-index:16; pointer-events:none; padding:5px 10px; border-radius:3px;
-  background:var(--glass-2); border:1px solid var(--line);
-  font-size:12px; font-weight:600; white-space:nowrap;
+  position:fixed; left:50%; top:calc(50% + 28px); transform:translateX(-50%);
+  z-index:16; pointer-events:none; padding:6px 11px; border-radius:var(--r-sm);
+  background:var(--glass-2); border:1px solid var(--line); box-shadow:var(--shadow-1);
+  font-size:var(--t-md); font-weight:600; white-space:nowrap;
 }
 #hover-label::after{
-  content:' — click'; font-family:var(--mono); font-size:9.5px; letter-spacing:.1em;
-  color:var(--accent); font-weight:400;
+  content:' · click'; font-family:var(--mono); font-size:var(--t-2xs);
+  letter-spacing:var(--track-num); color:var(--accent-soft); font-weight:400;
 }
-body.touch #hover-label::after{content:' — tap'}
+body.touch #hover-label::after{content:' · tap'}
 
 /* ---------------------------------------------------------------- locus -- */
-#locus{
-  position:fixed; left:calc(var(--pad) + var(--safe-l)); top:calc(72px + var(--safe-t));
-  z-index:18; padding:10px 13px; min-width:170px; transition:opacity .2s ease;
-}
-body:not(.mode-walk) #locus{opacity:0; pointer-events:none}
-#locus .lbl{margin:0 0 3px; font-size:9.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-dim)}
-#locus-zone{margin:0; font-size:16px; font-weight:600; letter-spacing:-.01em}
-#locus-meta{margin:3px 0 0; font-size:10px; color:var(--teal); letter-spacing:.04em}
+/* Sits in .hud-left, under the brand. It is a readout, so it must not eat the
+   right-button drag that starts the camera. */
+#locus{padding:9px 12px; transition:opacity .2s ease; pointer-events:none}
+body:not(.mode-walk) #locus{opacity:0}
+#locus .lbl{margin:0 0 3px; font-size:var(--t-2xs); letter-spacing:var(--track-caps);
+  text-transform:uppercase; color:var(--ink-dim)}
+#locus-zone{margin:0; font-family:var(--display); font-size:var(--t-lg); font-weight:600;
+  letter-spacing:-.01em; line-height:1.25}
+#locus-meta{margin:3px 0 0; font-size:var(--t-xs); color:var(--teal);
+  letter-spacing:var(--track-num)}
 
 /* --------------------------------------------------------------- levels -- */
 #levels{
-  position:fixed; right:calc(var(--pad) + var(--safe-r)); top:50%; transform:translateY(-50%);
-  z-index:18; display:flex; flex-direction:column; padding:5px; gap:2px;
+  position:fixed; right:calc(var(--pad) + var(--safe-r)); top:50%;
+  z-index:18; display:flex; flex-direction:column; padding:var(--s1); gap:2px;
+  transform:translateY(-50%); transition:transform .22s cubic-bezier(.2,.8,.3,1);
+}
+/* A drawer opens on the same edge and buries the rail. Slide it clear so you
+   can pick a floor and then a room without closing anything. */
+body:has(.drawer:not(.hidden)) #levels{
+  transform:translateY(-50%) translateX(calc(-1 * (var(--drawer-w) + var(--s3))));
 }
 #levels button{
-  padding:9px 11px; border-radius:4px; text-align:right;
-  font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--ink-dim);
-  display:flex; gap:9px; align-items:baseline; justify-content:flex-end; min-width:104px;
+  padding:0 11px; border-radius:var(--r-sm); text-align:right;
+  font-family:var(--mono); font-size:var(--t-xs); letter-spacing:var(--track-num);
+  color:var(--ink-dim);
+  display:flex; gap:var(--s3); align-items:baseline; justify-content:flex-end;
+  min-width:104px; min-height:var(--ctl);
   transition:background .12s ease, color .12s ease;
 }
-#levels button em{font-style:normal; font-family:var(--display); font-size:11.5px}
-#levels button:hover{background:rgba(255,255,255,.07); color:var(--ink)}
-#levels button.on{background:var(--accent); color:#fff}
+/* Floor name bright, floor code dim. The rail used to render both at the same
+   value, so five rows of identical grey took the eye longer than they should. */
+#levels button em{font-style:normal; font-family:var(--ui); font-size:var(--t-md);
+  font-weight:600; letter-spacing:0; color:var(--ink)}
+#levels button:hover{background:rgba(255,255,255,.08)}
+#levels button.on,#levels button.on em{color:#fff}
+#levels button.on{background:var(--accent-fill)}
 
 /* ---------------------------------------------------------- bottom bars -- */
 #bottom-left{position:fixed; left:calc(var(--pad) + var(--safe-l)); bottom:calc(var(--pad) + var(--safe-b)); z-index:18}
-#tod{display:flex; padding:4px; gap:2px}
-#tod button{padding:8px 13px; border-radius:4px; font-size:11.5px; font-weight:500;
-  color:var(--ink-dim); transition:background .12s ease, color .12s ease; min-height:38px}
-#tod button:hover{background:rgba(255,255,255,.07); color:var(--ink)}
-#tod button.on{background:rgba(255,255,255,.13); color:var(--ink)}
-#tod button span{display:block; font-family:var(--mono); font-size:9px; letter-spacing:.06em; opacity:.65; margin-top:1px}
+#tod{display:flex; padding:var(--s1); gap:2px}
+#tod button{
+  padding:0 13px; border-radius:var(--r-sm); font-size:var(--t-sm); font-weight:500;
+  color:var(--ink-dim); transition:background .12s ease, color .12s ease;
+  min-height:var(--ctl); display:flex; flex-direction:column; justify-content:center; gap:1px;
+}
+#tod button:hover{background:rgba(255,255,255,.08); color:var(--ink)}
+#tod button.on{background:rgba(255,255,255,.14); color:var(--ink)}
+#tod button span{display:block; font-family:var(--mono); font-size:var(--t-2xs);
+  letter-spacing:var(--track-num); color:var(--ink-dim)}
+#tod button.on span{color:var(--ink-dim)}
 
 #bottom-right{
   position:fixed; right:calc(var(--pad) + var(--safe-r)); bottom:calc(var(--pad) + var(--safe-b));
-  z-index:18; display:flex; gap:6px;
+  z-index:18; display:flex; gap:var(--s2);
 }
 .chip{
-  background:var(--glass); border:1px solid var(--line); border-radius:4px;
-  padding:10px 15px; font-size:12.5px; font-weight:500; min-height:38px;
-  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-  transition:background .12s ease, border-color .12s ease;
+  background:var(--glass); border:1px solid var(--line); border-radius:var(--r-md);
+  box-shadow:var(--shadow-1);
+  padding:0 15px; font-size:var(--t-md); font-weight:500; min-height:var(--tap);
+  display:inline-flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  transition:background .12s ease, border-color .12s ease, color .12s ease;
 }
 .chip:hover{background:var(--glass-2); border-color:var(--line-2)}
-.chip.on{background:var(--accent); border-color:var(--accent); color:#fff}
-.chip.accent{border-color:rgba(232,86,60,.5); color:#F3B4A6}
+.chip.on{background:var(--accent-fill); border-color:var(--accent-fill); color:#fff}
+.chip.accent{border-color:rgba(232,86,60,.55); color:var(--accent-soft)}
 .chip.accent:hover{border-color:var(--accent); color:#fff}
 .chip.accent.on{color:#fff}
-.chip.small{padding:6px 11px; font-size:11px; min-height:30px}
-.chip.icon-only{width:38px; padding:0; display:grid; place-items:center; font-family:var(--mono)}
+.chip.small{padding:0 12px; font-size:var(--t-sm); min-height:var(--ctl)}
+.chip.icon-only{width:var(--tap); padding:0; font-family:var(--mono); font-size:var(--t-base)}
 
 /* -------------------------------------------------------------- drawers -- */
 .drawer{
   position:fixed; right:calc(var(--pad) + var(--safe-r)); top:calc(var(--pad) + var(--safe-t));
-  z-index:30; width:min(340px,calc(100vw - 28px)); max-height:calc(100vh - 28px - var(--safe-t) - var(--safe-b));
+  z-index:30; width:min(var(--drawer-w),calc(100vw - 2 * var(--pad)));
+  max-height:calc(100vh - 2 * var(--pad) - var(--safe-t) - var(--safe-b));
   display:flex; flex-direction:column;
-  background:var(--glass-2); border:1px solid var(--line); border-radius:5px;
-  backdrop-filter:blur(20px) saturate(1.2); -webkit-backdrop-filter:blur(20px) saturate(1.2);
-  box-shadow:0 20px 54px rgba(0,0,0,.5);
+  background:var(--glass-2); border:1px solid var(--line); border-radius:var(--r-md);
+  backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
+  box-shadow:var(--shadow-2);
   animation:slide .2s cubic-bezier(.2,.8,.3,1);
 }
-@keyframes slide{from{opacity:0; transform:translateX(14px)}to{opacity:1; transform:none}}
+@keyframes slide{from{transform:translateX(14px)}to{transform:none}}
 .drawer header{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  padding:13px 15px; border-bottom:1px solid var(--line); flex:none;
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  padding:var(--s3) var(--s3) var(--s3) var(--s4); border-bottom:1px solid var(--line); flex:none;
 }
-.drawer h2{margin:0; font-size:15px; font-weight:600; letter-spacing:-.01em}
-.drawer .x{font-size:22px; line-height:1; color:var(--ink-dim); padding:0 4px; min-height:var(--tap);
-  display:grid; place-items:center}
-.drawer .x:hover{color:var(--accent)}
-.drawer-body{padding:15px; overflow-y:auto; -webkit-overflow-scrolling:touch}
-#poi-body{margin:0 0 14px; font-size:14.5px; line-height:1.62; color:#DCD9D2}
-#poi-fields{margin:0; display:grid; grid-template-columns:auto 1fr; gap:7px 14px; font-size:12.5px}
-#poi-fields dt{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
-  color:var(--ink-dim); padding-top:2px}
+.drawer h2{margin:0; font-family:var(--display); font-size:var(--t-lg); font-weight:600;
+  letter-spacing:-.01em}
+/* Hover used to turn the close X accent-red, which reads as "delete this". */
+.drawer .x{font-size:20px; line-height:1; flex:none}
+.drawer-body{padding:var(--s4); overflow-y:auto; min-height:0; -webkit-overflow-scrolling:touch}
+#poi-body{margin:0 0 var(--s4); font-size:var(--t-lg); line-height:1.6; color:#DCD9D2}
+#poi-fields{margin:0; display:grid; grid-template-columns:auto 1fr; gap:var(--s2) var(--s4);
+  font-size:var(--t-md)}
+#poi-fields dt{font-family:var(--mono); font-size:var(--t-2xs); letter-spacing:var(--track-caps);
+  text-transform:uppercase; color:var(--ink-dim); padding-top:2px}
 #poi-fields dd{margin:0; font-weight:500}
-.foot{margin:16px 0 0; font-size:10px; letter-spacing:.06em; color:var(--ink-dim); word-break:break-all}
+.foot{margin:var(--s4) 0 0; font-size:var(--t-2xs); letter-spacing:var(--track-num);
+  color:var(--ink-dim); overflow-wrap:anywhere}
 
-#rooms-list{overflow-y:auto; padding:6px; -webkit-overflow-scrolling:touch}
-.room-group{padding:11px 9px 4px}
-.room-group span{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em;
+#rooms-list{overflow-y:auto; min-height:0; padding:var(--s2); -webkit-overflow-scrolling:touch}
+.room-group{padding:var(--s3) var(--s2) var(--s1)}
+.room-group span{font-family:var(--mono); font-size:var(--t-2xs); letter-spacing:var(--track-caps);
   text-transform:uppercase; color:var(--ink-dim)}
 #rooms-list button{
-  width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
-  padding:11px 10px; border-radius:4px; text-align:left; font-size:13.5px; font-weight:500;
-  transition:background .12s ease; min-height:var(--tap);
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:var(--s3);
+  padding:10px; border-radius:var(--r-sm); text-align:left; font-size:var(--t-base);
+  font-weight:500; transition:background .12s ease; min-height:var(--tap);
 }
-#rooms-list button:hover{background:rgba(255,255,255,.07)}
-#rooms-list button i{font-style:normal; font-family:var(--mono); font-size:10px;
-  color:var(--ink-dim); letter-spacing:.04em; flex:none}
+#rooms-list button:hover{background:rgba(255,255,255,.08)}
+#rooms-list button i{font-style:normal; font-family:var(--mono); font-size:var(--t-xs);
+  color:var(--ink-dim); letter-spacing:var(--track-num); flex:none}
 #rooms-list button em{font-style:normal; width:7px; height:7px; border-radius:50%; flex:none;
-  margin-right:9px; display:inline-block; vertical-align:middle}
+  margin-right:var(--s2); display:inline-block; vertical-align:middle;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 
 /* ----------------------------------------------------------------- tour -- */
 #tour{
   position:fixed; left:50%; transform:translateX(-50%);
   bottom:calc(var(--pad) + var(--safe-b)); z-index:26;
-  width:min(560px, calc(100vw - 28px));
+  width:min(560px, calc(100vw - 2 * var(--pad)));
 }
-.tour-inner{padding:12px 14px 10px}
-.tour-head{display:flex; align-items:flex-start; justify-content:space-between; gap:14px}
-.tour-head .lbl{margin:0 0 2px; font-size:9.5px; letter-spacing:.14em;
+.tour-inner{padding:var(--s3) var(--s4)}
+.tour-head{display:flex; align-items:flex-start; justify-content:space-between; gap:var(--s4)}
+.tour-head .lbl{margin:0 0 2px; font-size:var(--t-2xs); letter-spacing:var(--track-caps);
   text-transform:uppercase; color:var(--ink-dim)}
-#tour-count{color:var(--accent)}
-#tour-stop{font-size:15px; font-weight:600; letter-spacing:-.01em}
-.tour-controls{display:flex; gap:4px; align-items:center; flex:none}
+#tour-count{color:var(--accent-soft)}
+#tour-stop{font-family:var(--display); font-size:var(--t-lg); font-weight:600;
+  letter-spacing:-.01em}
+.tour-controls{display:flex; gap:var(--s1); align-items:center; flex:none}
 .icon-btn.play{position:relative}
 .icon-btn.play::before{
   content:''; width:0; height:0; border-style:solid;
@@ -266,39 +392,44 @@ body:not(.mode-walk) #locus{opacity:0; pointer-events:none}
   border-left:3px solid currentColor; border-right:3px solid currentColor;
 }
 .tour-track{
-  position:relative; height:22px; margin:10px 0 2px; cursor:pointer; display:flex; align-items:center;
+  position:relative; height:24px; margin:var(--s2) 0 2px; cursor:pointer;
+  display:flex; align-items:center;
 }
 .tour-track::before{
-  content:''; position:absolute; left:0; right:0; height:3px; border-radius:2px;
-  background:rgba(240,238,232,.16);
+  content:''; position:absolute; left:0; right:0; height:4px; border-radius:999px;
+  background:rgba(240,238,232,.18);
 }
 #tour-fill{
-  position:absolute; left:0; height:3px; border-radius:2px; background:var(--accent);
+  position:absolute; left:0; height:4px; border-radius:999px; background:var(--accent);
   width:0%; pointer-events:none;
 }
 #tour-ticks{position:absolute; inset:0; pointer-events:none}
 #tour-ticks i{
-  position:absolute; top:50%; width:2px; height:8px; margin-top:-4px; border-radius:1px;
-  background:rgba(240,238,232,.34); transform:translateX(-1px);
+  position:absolute; top:50%; width:2px; height:10px; margin-top:-5px; border-radius:1px;
+  background:rgba(240,238,232,.38); transform:translateX(-1px);
 }
-#tour-ticks i.done{background:rgba(232,86,60,.75)}
+#tour-ticks i.done{background:rgba(232,86,60,.85)}
 .tour-chapters{
-  display:flex; gap:4px; overflow-x:auto; padding:6px 0 2px; scrollbar-width:none;
+  display:flex; gap:var(--s1); overflow-x:auto; padding:var(--s2) 0 0; scrollbar-width:none;
   -webkit-overflow-scrolling:touch;
 }
 .tour-chapters::-webkit-scrollbar{display:none}
 .tour-chapters button{
-  flex:none; padding:6px 11px; border-radius:3px; font-size:11.5px; color:var(--ink-dim);
-  white-space:nowrap; transition:background .12s ease, color .12s ease; min-height:32px;
+  flex:none; padding:0 12px; border-radius:var(--r-sm); font-size:var(--t-sm);
+  color:var(--ink-dim); white-space:nowrap; min-height:34px;
+  display:inline-flex; align-items:center;
+  transition:background .12s ease, color .12s ease;
 }
-.tour-chapters button:hover{background:rgba(255,255,255,.07); color:var(--ink)}
-.tour-chapters button.on{background:rgba(232,86,60,.18); color:#F3B4A6}
+.tour-chapters button:hover{background:rgba(255,255,255,.08); color:var(--ink)}
+.tour-chapters button.on{background:rgba(232,86,60,.20); color:var(--accent-soft)}
 
 /* ---------------------------------------------------------------- toast -- */
 #toast{
-  position:fixed; left:50%; top:calc(74px + var(--safe-t)); transform:translateX(-50%); z-index:40;
-  padding:9px 14px; border-radius:4px; background:var(--glass-2); border:1px solid var(--line);
-  font-size:12.5px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  position:fixed; left:50%; top:calc(var(--pad) + 60px + var(--safe-t));
+  transform:translateX(-50%); z-index:40;
+  padding:10px 14px; border-radius:var(--r-md); background:var(--glass-2);
+  border:1px solid var(--line); box-shadow:var(--shadow-1);
+  font-size:var(--t-md); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   pointer-events:none; white-space:nowrap;
 }
 
@@ -309,84 +440,92 @@ body:not(.mode-walk) #locus{opacity:0; pointer-events:none}
 }
 #stick.on{opacity:1}
 #stick i,#stick b{position:absolute; border-radius:50%; display:block}
+/* The ring lands on whatever the floor happens to be. A light border alone
+   disappears over pale tile, so it carries a dark rim as well. */
 #stick i{
   width:132px; height:132px; margin:-66px 0 0 -66px;
-  border:1.5px solid rgba(240,238,232,.28); background:rgba(20,24,26,.32);
+  border:2px solid rgba(240,238,232,.45); background:rgba(16,20,22,.34);
+  box-shadow:0 0 0 1px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.35);
   backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
 }
 #stick b{
   width:52px; height:52px; margin:-26px 0 0 -26px;
-  background:rgba(240,238,232,.82); box-shadow:0 2px 10px rgba(0,0,0,.4);
+  background:rgba(240,238,232,.9); box-shadow:0 2px 10px rgba(0,0,0,.5);
   transform:translate(var(--kx,0), var(--ky,0));
 }
 
 /* ---------------------------------------------------------- small screens */
 @media (max-width:860px){
-  :root{--pad:10px}
+  :root{--pad:12px; --ctl:var(--tap)}
   #hud-top{grid-template-columns:1fr auto}
-  #views{
-    grid-column:1 / -1; grid-row:2; justify-self:stretch; justify-content:space-between;
-    margin-top:8px; overflow-x:auto; scrollbar-width:none;
-  }
-  #views::-webkit-scrollbar{display:none}
-  #views button{flex:1; text-align:center; padding:9px 8px; font-size:11.5px}
-  #views button .k{display:none}
-  .brand p{font-size:12.5px}
+  .hud-left{max-width:100%}
+  .hud-left > *{min-width:0}
+  .brand{padding:8px 11px}
+  .brand p{font-size:var(--t-md)}
   .studio-line{display:none}
 
-  /* The bottom of a phone screen is a stack, not a scatter: level rail on the
-     bottom edge where the thumb reaches, actions above it, and the readout
-     moved up under the view chips so nothing overlaps the joystick zone. */
-  #locus{
-    top:calc(var(--safe-t) + 118px); bottom:auto;
-    left:calc(var(--pad) + var(--safe-l)); min-width:0; padding:7px 10px;
+  #views{
+    grid-column:1 / -1; grid-row:2; justify-self:stretch; justify-content:space-between;
+    margin-top:var(--s2); overflow-x:auto; scrollbar-width:none;
   }
-  #locus .lbl{font-size:8.5px}
-  #locus-zone{font-size:13.5px}
-  #locus-meta{font-size:9.5px}
+  #views::-webkit-scrollbar{display:none}
+  #views button{flex:1; justify-content:center; padding:0 8px; font-size:var(--t-sm)}
+  #views button .k{display:none}
 
+  #locus{padding:8px 11px}
+  #locus-zone{font-size:var(--t-base)}
+
+  /* Level rail on the bottom edge where the thumb reaches, action chips above
+     it. The chips clear the rail by its own height, not by a guess. */
   #levels{
     top:auto; bottom:calc(var(--pad) + var(--safe-b)); left:50%; right:auto;
-    transform:translateX(-50%); flex-direction:row; padding:4px;
+    flex-direction:row; padding:var(--s1);
     max-width:calc(100vw - 2 * var(--pad)); overflow-x:auto; scrollbar-width:none;
+    transform:translateX(-50%);
   }
+  body:has(.drawer:not(.hidden)) #levels{transform:translateX(-50%)}
   #levels::-webkit-scrollbar{display:none}
-  #levels button{min-width:0; padding:9px 12px; justify-content:center}
+  #levels button{min-width:0; padding:0 14px; justify-content:center}
   #levels button em{display:none}
 
-  #bottom-left{
-    left:calc(var(--pad) + var(--safe-l));
-    bottom:calc(var(--pad) + var(--safe-b) + 50px);
-  }
-  #tod button{padding:9px 13px; font-size:11.5px}
+  #bottom-left,#bottom-right{bottom:calc(var(--pad) + var(--safe-b) + 60px)}
+  #tod button{padding:0 14px; font-size:var(--t-md); min-height:var(--tap)}
   #tod button span{display:none}
 
-  #bottom-right{
-    right:calc(var(--pad) + var(--safe-r));
-    bottom:calc(var(--pad) + var(--safe-b) + 50px);
-    flex-direction:row;
-  }
-  .chip{padding:9px 13px; font-size:12px}
+  .chip{padding:0 14px}
+  .tour-chapters button{min-height:40px}
 
-  /* Bottom sheets read far better than side panels on a phone. */
+  /* Bottom sheets read much better than side panels on a phone. */
   .drawer{
-    top:auto; bottom:0; left:0; right:0; width:auto; border-radius:12px 12px 0 0;
+    top:auto; bottom:0; left:0; right:0; width:auto; max-width:none;
+    border-radius:var(--r-lg) var(--r-lg) 0 0;
     max-height:64vh; padding-bottom:var(--safe-b); animation:sheet .22s cubic-bezier(.2,.8,.3,1);
   }
-  @keyframes sheet{from{transform:translateY(24px); opacity:0}to{transform:none; opacity:1}}
+  /* Grab handle. Nothing listens to it, it just says the sheet came from the
+     bottom edge. */
+  .drawer::before{
+    content:''; position:absolute; top:7px; left:50%; transform:translateX(-50%);
+    width:36px; height:4px; border-radius:999px; background:var(--line-2);
+  }
+  .drawer header{padding-top:var(--s4)}
+  @keyframes sheet{from{transform:translateY(24px)}to{transform:none}}
 
   #tour{left:0; right:0; bottom:0; width:auto; transform:none}
-  .tour-inner{border-radius:12px 12px 0 0; padding-bottom:calc(10px + var(--safe-b))}
-  #tour-stop{font-size:14px}
+  .tour-inner{border-radius:var(--r-lg) var(--r-lg) 0 0;
+    padding-bottom:calc(var(--s3) + var(--safe-b))}
+  #tour-stop{font-size:var(--t-base)}
   /* The tour owns the bottom of the screen while it runs. */
   body.touring #levels,body.touring #bottom-left,body.touring #bottom-right{display:none}
   body.touring #locus{display:none}
 
   .overlay{align-items:flex-end}
-  .intro{padding-bottom:8px}
-  /* Clear of the view chips, which sit on their own row on a phone. */
-  #toast{top:calc(var(--safe-t) + 148px); max-width:calc(100vw - 24px);
-    white-space:normal; text-align:center}
+  .intro{padding-bottom:var(--s2)}
+  /* Above the action chips rather than below the top stack, so it does not need
+     to know how tall the header happens to be. */
+  #toast{
+    top:auto; bottom:calc(var(--pad) + var(--safe-b) + 112px);
+    max-width:calc(100vw - 2 * var(--pad)); white-space:normal; text-align:center;
+  }
   body.touring #toast{display:none}
 }
 

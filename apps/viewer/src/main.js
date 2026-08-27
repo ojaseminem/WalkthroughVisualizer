@@ -3,10 +3,10 @@ import { WalkthroughViewer, TIME_OF_DAY, VIEW_MODES, isTouchDevice } from '@wv/c
 /**
  * Viewer shell.
  *
- * Every panel is driven off registry events, not off knowledge of this
- * particular building — swap the .glb and the same shell populates itself. The
- * JSON-declared panel system replaces this hand-wiring in M3; the event contract
- * it consumes is already the final one.
+ * Panels are built from registry events, so swapping the .glb populates the
+ * same shell with a different building. The JSON-declared panel system replaces
+ * this hand-wiring in M3. The event contract it consumes is already the final
+ * one.
  */
 
 const $ = (id) => document.getElementById(id);
@@ -14,8 +14,8 @@ const SCENE_URL = './content/kp-tower/scene.glb';
 const TOUCH = isTouchDevice();
 
 // Device-floor budget: mid-range Android at 30fps, from the locked decision.
-// Draw calls are the binding constraint on that class of GPU long before
-// triangles are; 150 is what an Adreno 6xx / Mali-G57 holds comfortably.
+// Draw calls bind on that class of GPU long before triangles do. 150 is what an
+// Adreno 6xx / Mali-G57 holds comfortably.
 const BUDGET = { drawCalls: 150, triangles: 180000 };
 
 const CATEGORY_COLOR = {
@@ -28,8 +28,9 @@ const viewer = new WalkthroughViewer(stage, {
   startLevel: 'L01',
   timeOfDay: 'noon',
   stickEl: $('stick'),
-  // A phone renders the same scene into far fewer pixels; capping the ratio is
-  // the cheapest thing that keeps a mid-range Android at 30fps.
+  // A phone often reports a device pixel ratio of 3, which triples the pixels
+  // for the same scene. Capping the ratio is the cheapest way to hold 30fps on
+  // a mid-range Android.
   maxPixelRatio: TOUCH ? 1.6 : 2,
 });
 
@@ -42,7 +43,9 @@ document.body.classList.add('mode-walk');
 // --------------------------------------------------------------------------- //
 
 function setProgress(f, msg) {
-  $('bar-fill').style.width = `${Math.round(f * 100)}%`;
+  const pct = Math.round(f * 100);
+  $('bar-fill').style.width = `${pct}%`;
+  $('bar-fill').parentElement.setAttribute('aria-valuenow', pct);
   if (msg) $('load-status').textContent = msg;
 }
 
@@ -53,7 +56,7 @@ viewer.addEventListener('ready', (e) => {
 
   if (d.project) {
     $('proj-name').textContent = d.project.label || 'Untitled project';
-    $('load-title').textContent = (d.project.label || '').split('—')[0].trim() || 'Scene';
+    $('load-title').textContent = d.project.label || 'Scene';
   }
 
   buildViews();
@@ -64,12 +67,14 @@ viewer.addEventListener('ready', (e) => {
   $('start-hint').innerHTML = TOUCH
     ? 'Drag the <b>left thumb</b> to walk, drag <b>anywhere else</b> to look, '
       + '<b>tap</b> a marker to open it.'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move, mouse to look, '
-      + '<kbd>Shift</kbd> to walk faster, <kbd>Esc</kbd> to release the cursor.';
+    : 'Hold the <b>right mouse button</b> to look around and walk with '
+      + '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>. '
+      + '<kbd>Shift</kbd> to go faster. Let go and the cursor is yours again.';
 
   setProgress(1, 'Ready');
   $('loader').classList.add('hidden');
   $('start').classList.remove('hidden');
+  $('start-btn').focus();
 
   if (d.warnings.length) console.warn('[wv] validator warnings\n' + d.warnings.join('\n'));
 });
@@ -83,9 +88,10 @@ function buildViews() {
   nav.innerHTML = '';
   for (const [id, v] of Object.entries(VIEW_MODES)) {
     const b = document.createElement('button');
-    b.innerHTML = `${v.label}${TOUCH ? '' : `<span class="k">${v.key}</span>`}`;
+    b.innerHTML = `${v.label}${TOUCH ? '' : `<span class="k" aria-hidden="true">${v.key}</span>`}`;
     b.dataset.mode = id;
     b.title = v.hint;
+    b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => switchView(id));
     nav.appendChild(b);
   }
@@ -96,18 +102,21 @@ function switchView(mode) {
   viewer.setViewMode(mode);
   closeDrawer('poi');
   toast(mode === 'walk'
-    ? (TOUCH ? 'Walk mode — drag the left thumb to move' : 'Walk mode — click to take control')
-    : (TOUCH ? `${VIEW_MODES[mode].label} — drag to orbit, pinch to zoom`
-      : `${VIEW_MODES[mode].label} — drag to orbit, scroll to zoom`));
+    ? (TOUCH ? 'Walk mode. Drag the left thumb to move.'
+      : 'Walk mode. Hold the right mouse button to look and walk.')
+    : (TOUCH ? `${VIEW_MODES[mode].label}. Drag to orbit, pinch to zoom.`
+      : `${VIEW_MODES[mode].label}. Drag to orbit, scroll to zoom.`));
 }
 
-// The event fires for internal switches too — starting a tour drops to walk
-// mode, and toasting there would talk over the tour that just began. Only
-// switchView(), the user-initiated path, announces itself.
+// The event fires for internal switches too. Starting a tour drops to walk
+// mode, and a toast there talks over the tour that just began. Only
+// switchView() announces itself, and that is the path a user takes.
 viewer.addEventListener('viewmode', (e) => {
   const { mode } = e.detail;
   for (const b of $('views').querySelectorAll('button')) {
-    b.classList.toggle('on', b.dataset.mode === mode);
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
   }
   for (const m of Object.keys(VIEW_MODES)) document.body.classList.remove(`mode-${m}`);
   document.body.classList.add(`mode-${mode}`);
@@ -125,9 +134,10 @@ function buildLevels(levels) {
     b.innerHTML = `<em>${lv.label}</em><span>${lv.id}</span>`;
     b.dataset.level = lv.id;
     b.title = lv.label;
+    b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => {
       viewer.setLevel(lv.id, { teleport: viewer.viewMode === 'walk' });
-      // The plan view is per level, so changing level must reframe it.
+      // The plan view is per level, so a level change has to reframe it.
       if (viewer.viewMode === 'plan') {
         viewer.setViewMode('walk', { animate: false });
         viewer.setViewMode('plan');
@@ -140,7 +150,9 @@ function buildLevels(levels) {
 
 viewer.addEventListener('level', (e) => {
   for (const b of $('levels').querySelectorAll('button')) {
-    b.classList.toggle('on', b.dataset.level === e.detail.id);
+    const on = b.dataset.level === e.detail.id;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
   }
   if (!$('rooms').classList.contains('hidden')) buildRooms();
 });
@@ -152,14 +164,14 @@ viewer.addEventListener('level', (e) => {
 function buildTimeOfDay() {
   const box = $('tod');
   box.innerHTML = '';
-  // Three side-by-side chips do not fit next to the action buttons on a 390px
-  // screen, so touch gets one chip that cycles instead.
+  // Three side-by-side chips do not fit beside the action buttons on a 390px
+  // screen, so touch gets one chip that cycles.
   if (TOUCH) {
     const b = document.createElement('button');
     b.id = 'tod-cycle';
     b.className = 'on';
     // The viewer sets the time of day during load(), before this panel exists,
-    // so seed the label from current state rather than waiting for the event.
+    // so seed the label from current state instead of waiting for the event.
     b.textContent = TIME_OF_DAY[viewer.timeOfDay]?.label ?? 'Midday';
     b.addEventListener('click', cycleTimeOfDay);
     box.appendChild(b);
@@ -169,6 +181,7 @@ function buildTimeOfDay() {
     const b = document.createElement('button');
     b.innerHTML = `${p.label}<span>${p.hour}</span>`;
     b.dataset.tod = key;
+    b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => viewer.setTimeOfDay(key));
     box.appendChild(b);
   }
@@ -178,7 +191,9 @@ viewer.addEventListener('timeofday', (e) => {
   const cycle = $('tod-cycle');
   if (cycle) { cycle.textContent = e.detail.label; return; }
   for (const b of $('tod').querySelectorAll('button')) {
-    b.classList.toggle('on', b.dataset.tod === e.detail.key);
+    const on = b.dataset.tod === e.detail.key;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
   }
 });
 
@@ -207,11 +222,27 @@ viewer.addEventListener('stats', (e) => {
   badge.className = `badge ${over ? 'warn' : 'ok'}`;
 });
 
-$('btn-stats').addEventListener('click', () => $('stats').classList.toggle('hidden'));
+$('btn-stats').addEventListener('click', () => {
+  const shown = $('stats').classList.toggle('hidden') === false;
+  $('btn-stats').setAttribute('aria-pressed', String(shown));
+});
 
 // --------------------------------------------------------------------------- //
 // POIs
 // --------------------------------------------------------------------------- //
+
+// Where focus was when a drawer opened, so closing it does not dump the
+// keyboard back at the top of the document.
+let focusBeforeDrawer = null;
+
+function enterDrawer(id, fromKeyboard) {
+  focusBeforeDrawer = document.activeElement;
+  // Pull focus only when the drawer was opened from the keyboard. On a mouse
+  // click this would park the caret on the close button, where Space closes the
+  // drawer instead of pausing the tour.
+  if (!fromKeyboard) return;
+  $(id).querySelector('[data-close]')?.focus();
+}
 
 function openPoi(poi) {
   $('poi-title').textContent = poi.label;
@@ -227,16 +258,28 @@ function openPoi(poi) {
   }
   const zone = viewer.reg.zoneById.get(poi.zone);
   $('poi-zone').textContent = `${poi.id}  ·  ${zone ? zone.label : poi.level}`;
+  const wasOpen = !$('poi').classList.contains('hidden');
   $('poi').classList.remove('hidden');
   $('rooms').classList.add('hidden');
-  $('btn-rooms').classList.remove('on');
+  setRoomsChip(false);
+  if (!wasOpen) enterDrawer('poi', false);
   history.replaceState(null, '', `?poi=${encodeURIComponent(poi.id)}`);
 }
 
+function setRoomsChip(open) {
+  $('btn-rooms').classList.toggle('on', open);
+  $('btn-rooms').setAttribute('aria-expanded', String(open));
+}
+
 function closeDrawer(id) {
-  $(id).classList.add('hidden');
+  const el = $(id);
+  const wasOpen = !el.classList.contains('hidden');
+  el.classList.add('hidden');
   if (id === 'poi') history.replaceState(null, '', location.pathname);
-  if (id === 'rooms') $('btn-rooms').classList.remove('on');
+  if (id === 'rooms') setRoomsChip(false);
+  if (wasOpen && focusBeforeDrawer && el.contains(document.activeElement)) {
+    focusBeforeDrawer.focus?.();
+  }
 }
 
 for (const b of document.querySelectorAll('[data-close]')) {
@@ -267,7 +310,7 @@ function buildRooms() {
     for (const z of zones) {
       const b = document.createElement('button');
       const dot = CATEGORY_COLOR[z.category] || '#A7ADA6';
-      b.innerHTML = `<span><em style="background:${dot}"></em>${z.label}</span>`
+      b.innerHTML = `<span><em style="background:${dot}" aria-hidden="true"></em>${z.label}</span>`
         + `<i>${z.area ? z.area + ' sq m' : (z.category || '')}</i>`;
       b.addEventListener('click', () => {
         if (viewer.viewMode !== 'walk') viewer.setViewMode('walk');
@@ -290,12 +333,20 @@ function buildRooms() {
   }
 }
 
-$('btn-rooms').addEventListener('click', () => {
+// A click from Enter, Space or the R shortcut reports detail 0; a press of the
+// mouse reports 1 or more. That is the signal for whether to move focus.
+$('btn-rooms').addEventListener('click', (ev) => {
   const el = $('rooms');
   const opening = el.classList.contains('hidden');
-  if (opening) { buildRooms(); el.classList.remove('hidden'); $('poi').classList.add('hidden'); }
-  else el.classList.add('hidden');
-  $('btn-rooms').classList.toggle('on', opening);
+  if (opening) {
+    buildRooms();
+    el.classList.remove('hidden');
+    $('poi').classList.add('hidden');
+    enterDrawer('rooms', ev.detail === 0);
+  } else {
+    el.classList.add('hidden');
+  }
+  setRoomsChip(opening);
 });
 
 // --------------------------------------------------------------------------- //
@@ -341,6 +392,7 @@ viewer.addEventListener('tour', (e) => {
   if (d.state === 'stop') {
     $('tour').classList.add('hidden');
     $('btn-tour').classList.remove('on');
+    $('btn-tour').setAttribute('aria-pressed', 'false');
     document.body.classList.remove('touring');
     return;
   }
@@ -350,13 +402,17 @@ viewer.addEventListener('tour', (e) => {
   }
   $('tour').classList.remove('hidden');
   $('btn-tour').classList.add('on');
+  $('btn-tour').setAttribute('aria-pressed', 'true');
   document.body.classList.add('touring');
   $('tour-stop').textContent = d.stopLabel;
   $('tour-count').textContent = `${d.stopIndex + 1} / ${d.stops.length}`;
   $('tour-fill').style.width = `${(d.progress * 100).toFixed(1)}%`;
   $('tour-track').setAttribute('aria-valuenow', Math.round(d.progress * 100));
+  $('tour-track').setAttribute('aria-valuetext',
+    `Stop ${d.stopIndex + 1} of ${d.stops.length}, ${d.stopLabel}`);
   $('tour-play').classList.toggle('playing', !d.paused);
   $('tour-play').title = d.paused ? 'Play' : 'Pause';
+  $('tour-play').setAttribute('aria-label', d.paused ? 'Play' : 'Pause');
   renderChapters(d);
 });
 
@@ -373,7 +429,7 @@ $('tour-prev').addEventListener('click', () => viewer.tourPrev());
 $('tour-next').addEventListener('click', () => viewer.tourNext());
 $('tour-play').addEventListener('click', () => viewer.pauseTour());
 
-// Scrubbing: pointer events on the track, so it works with mouse and finger.
+// Scrubbing runs off pointer events on the track, so mouse and finger both work.
 const track = $('tour-track');
 let scrubbing = false;
 const scrubTo = (clientX) => {
@@ -394,49 +450,55 @@ track.addEventListener('keydown', (e) => {
 });
 
 // --------------------------------------------------------------------------- //
-// Pointer lock, hover, clicks (desktop)
+// Hover and clicks (desktop)
 // --------------------------------------------------------------------------- //
 
-$('start-btn').addEventListener('click', () => {
-  $('start').classList.add('hidden');
-  if (!TOUCH) viewer.player.requestLock();
-});
-$('start').addEventListener('click', (e) => {
-  if (e.target === $('start')) {
-    $('start').classList.add('hidden');
-    if (!TOUCH) viewer.player.requestLock();
-  }
-});
+// Only the buttons dismiss the start card. It used to close on any click that
+// landed on the backdrop, so a stray click outside the copy dropped people into
+// the building before they had read the controls.
+$('start-btn').addEventListener('click', closeStart);
 
-viewer.addEventListener('lock', (e) => {
-  if (!e.detail.locked && ready && !viewer.tourPlayer) {
+// The control is a right-button hold, which nobody guesses. The start card
+// says so, but people dismiss that card without reading it, and then stand in
+// a lobby wondering why the mouse does nothing. The hint sits under the centre
+// of the view until the first drag, then never comes back for the session.
+let hintSpent = false;
+function showControlHint() {
+  if (hintSpent || TOUCH || !ready) return;
+  if (viewer.viewMode !== 'walk' || viewer.tourPlayer) return;
+  $('control-hint').classList.remove('hidden');
+}
+function retireControlHint() {
+  hintSpent = true;
+  $('control-hint').classList.add('hidden');
+}
+
+viewer.addEventListener('drag', (e) => {
+  document.body.classList.toggle('dragging', e.detail.dragging);
+  if (e.detail.dragging) retireControlHint();
+  if (!e.detail.dragging && ready && !viewer.tourPlayer) {
     document.body.classList.remove('aiming');
     $('hover-label').classList.add('hidden');
   }
 });
 
 if (!TOUCH) {
-  stage.addEventListener('click', () => {
-    if (!ready || viewer.tourPlayer || viewer.viewMode !== 'walk') return;
-    if (!viewer.player.locked) { viewer.player.requestLock(); return; }
-    const poi = viewer.pois.hovered;
-    if (poi) { viewer.player.releaseLock(); openPoi(poi); }
+  // Left click opens whatever the cursor is over. The right button drives the
+  // camera and is handled in the player, so all this has to do is stay quiet
+  // while a drag is running.
+  stage.addEventListener('click', (ev) => {
+    if (!ready || viewer.tourPlayer || viewer.player.dragging) return;
+    const poi = viewer.pickAt(ev.clientX, ev.clientY);
+    if (poi) openPoi(poi);
   });
 
   stage.addEventListener('mousemove', (ev) => {
     if (!ready || viewer.tourPlayer) return;
-    if (viewer.viewMode === 'walk' && viewer.player.locked) return;
+    if (viewer.player.dragging) return;
     const poi = viewer.pickAt(ev.clientX, ev.clientY);
     viewer.pois.setHovered(poi);
     stage.style.cursor = poi ? 'pointer' : (viewer.viewMode === 'walk' ? 'default' : 'grab');
     updateHover(poi);
-  });
-
-  stage.addEventListener('mousedown', (ev) => {
-    if (!ready || viewer.tourPlayer) return;
-    if (viewer.viewMode === 'walk' && viewer.player.locked) return;
-    const poi = viewer.pickAt(ev.clientX, ev.clientY);
-    if (poi) openPoi(poi);
   });
 }
 
@@ -470,7 +532,7 @@ window.addEventListener('keydown', (e) => {
     case 'KeyR': $('btn-rooms').click(); break;
     case 'KeyP': $('btn-stats').click(); break;
     case 'KeyM': cycleTimeOfDay(); break;
-    case 'Escape': closeDrawer('poi'); closeDrawer('rooms'); break;
+    case 'Escape': closeStart(); closeDrawer('poi'); closeDrawer('rooms'); break;
     case 'Space': if (viewer.tourPlayer) { e.preventDefault(); viewer.pauseTour(); } break;
     case 'BracketRight': if (viewer.tourPlayer) viewer.tourNext(); break;
     case 'BracketLeft': if (viewer.tourPlayer) viewer.tourPrev(); break;
@@ -485,9 +547,21 @@ function cycleTimeOfDay() {
 }
 
 $('btn-help').addEventListener('click', () => {
+  $('start-btn').textContent = 'Back to the view';
+  openStart();
+});
+
+function openStart() {
   $('start').classList.remove('hidden');
   viewer.player.releaseLock();
-});
+  $('start-btn').focus();
+}
+
+function closeStart() {
+  if ($('start').classList.contains('hidden')) return;
+  $('start').classList.add('hidden');
+  showControlHint();
+}
 
 // --------------------------------------------------------------------------- //
 // Toast
@@ -522,8 +596,8 @@ viewer.load(SCENE_URL, (f) => setProgress(0.05 + f * 0.9, `Loading geometry… $
   })
   .catch((err) => {
     console.error(err);
-    $('load-status').textContent = `Could not load the scene — ${err.message || err}`;
-    $('load-status').style.color = '#E8563C';
+    $('load-status').textContent = `Could not load the scene. ${err.message || err}`;
+    $('load-status').classList.add('error');
   });
 
 window.wv = viewer;

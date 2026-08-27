@@ -1,0 +1,55 @@
+{
+  "input": "/root/wv/WalkthroughVisualizer/content-src/kp-tower/scene.glb",
+  "output": "/root/wv/WalkthroughVisualizer/apps/viewer/public/content/kp-tower/scene.glb",
+  "before": {
+    "nodes": 669,
+    "meshes": 9,
+    "primitives": 42,
+    "triangles": 6032,
+    "vertices": 18096,
+    "drawCalls": 648,
+    "renderedTriangles": 22522,
+    "materials": 13,
+    "textures": 33,
+    "textureBytes": 12840150,
+    "tags": {
+      "PROJECT": 1,
+      "LEVEL": 5,
+      "NAV_BLOCK": 355,
+      "POI": 38,
+      "NAV_FLOOR": 73,
+      "ZONE": 69,
+      "CAM_TOUR": 6,
+      "CAM_KEY": 42,
+      "PORTAL": 54
+    },
+    "taggedNodes": 643,
+    "fileBytes": 1137092
+  },
+  "after": {
+    "nodes": 656,
+    "meshes": 6,
+    "primitives": 45,
+    "triangles": 16640,
+    "vertices": 30732,
+    "drawCalls": 45,
+    "renderedTriangles": 16640,
+    "materials": 12,
+    "textures": 32,
+    "textureBytes": 656024,
+    "tags": {
+      "PROJECT": 1,
+      "LEVEL": 5,
+      "NAV_BLOCK": 355,
+      "POI": 38,
+      "NAV_FLOOR": 73,
+      "ZONE": 69,
+      "CAM_TOUR": 6,
+      "CAM_KEY": 42,
+      "PORTAL": 54
+    },
+    "taggedNodes": 643,
+    "fileBytes": 1198336
+  },
+  "warnings": []
+}

@@ -14,12 +14,17 @@ import json
 import sys
 from pathlib import Path
 
-from glbwriter import GlbWriter, Material, MeshBuilder, Node
+from glbwriter import GlbWriter, Surface, MeshBuilder, Node
 import plan as P
 
 
 # --------------------------------------------------------------------------- #
-# Palette
+# Surfaces and finishes
+#
+# A surface is a real material: one texture set, one glTF material. A finish is
+# a named use of a surface plus a tint, and the tint goes to vertex colours. Do
+# it the other way round and thirty finishes become thirty materials, which is
+# thirty draw calls the merge pass cannot touch.
 # --------------------------------------------------------------------------- #
 
 def hexc(h: str, a: float = 1.0):
@@ -27,59 +32,93 @@ def hexc(h: str, a: float = 1.0):
     return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, a)
 
 
-PALETTE = {
-    "wall_int":      Material("wall_int", hexc("E3DED4"), roughness=0.92),
-    "wall_ext":      Material("wall_ext", hexc("BFB7A8"), roughness=0.94),
-    "wall_corridor": Material("wall_corridor", hexc("D4CFC4"), roughness=0.92),
-    "floor_tile":    Material("floor_tile", hexc("CCC6BB"), roughness=0.35),
-    "floor_wood":    Material("floor_wood", hexc("9C6B41"), roughness=0.55),
-    "floor_bath":    Material("floor_bath", hexc("AEB4B6"), roughness=0.40),
-    "floor_deck":    Material("floor_deck", hexc("9C9488"), roughness=0.80),
-    "ceiling":       Material("ceiling", hexc("EEEBE5"), roughness=0.95),
-    "glass":         Material("glass", hexc("A8C8DA", 0.30), metallic=0.0, roughness=0.08,
-                              double_sided=True),
-    "railing":       Material("railing", hexc("6E7679"), metallic=0.80, roughness=0.35),
-    "door":          Material("door", hexc("7A5433"), roughness=0.60),
-    "counter":       Material("counter", hexc("33383B"), roughness=0.25),
-    "cabinet":       Material("cabinet", hexc("BDB6A7"), roughness=0.55),
-    "wood_furn":     Material("wood_furn", hexc("8A6242"), roughness=0.60),
-    "wood_dark":     Material("wood_dark", hexc("5C4530"), roughness=0.55),
-    "fabric":        Material("fabric", hexc("6B7F82"), roughness=0.95),
-    "linen":         Material("linen", hexc("DAD6CD"), roughness=0.95),
-    "linen_alt":     Material("linen_alt", hexc("C4CBC6"), roughness=0.95),
-    "steel":         Material("steel", hexc("A9AFB2"), metallic=0.90, roughness=0.28),
-    "screen":        Material("screen", hexc("1A1D1F"), roughness=0.20),
-    "ceramic":       Material("ceramic", hexc("E8E8E4"), roughness=0.20),
-    "appliance":     Material("appliance", hexc("DCDEDC"), roughness=0.40),
-    "planter":       Material("planter", hexc("7A6A55"), roughness=0.90),
-    "foliage":       Material("foliage", hexc("5E7A4A"), roughness=0.95),
-    "concrete":      Material("concrete", hexc("A6A39B"), roughness=0.90),
-    "ground":        Material("ground", hexc("8B9179"), roughness=1.0),
-    "grass":         Material("grass", hexc("6E8055"), roughness=1.0),
-    "road":          Material("road", hexc("55585A"), roughness=0.85),
-    "context":       Material("context", hexc("9AA0A4"), roughness=0.90),
-    "lift":          Material("lift", hexc("8E9599"), metallic=0.85, roughness=0.30),
-    "signage":       Material("signage", hexc("C4341F"), roughness=0.50, emissive=(0.10, 0.02, 0.01)),
-    "wv_hidden":     Material("wv_hidden", hexc("FF00FF", 0.0), roughness=1.0, double_sided=True),
+SURFACES = {
+    # name        texture set   metres per repeat
+    "plaster":  Surface("plaster",  tex="plaster",  uv_scale=2.4, normal_scale=0.6),
+    "tile":     Surface("tile",     tex="tile",     uv_scale=3.2, normal_scale=0.8),
+    "timber":   Surface("timber",   tex="timber",   uv_scale=2.4, normal_scale=0.7),
+    "granite":  Surface("granite",  tex="granite",  uv_scale=1.2, normal_scale=0.5),
+    "concrete": Surface("concrete", tex="concrete", uv_scale=3.0, normal_scale=0.7),
+    "fabric":   Surface("fabric",   tex="fabric",   uv_scale=0.8, normal_scale=0.5),
+    "metal":    Surface("metal",    tex="metal",    uv_scale=0.6, metallic=1.0, normal_scale=0.4),
+    "deck":     Surface("deck",     tex="deck",     uv_scale=2.4, normal_scale=0.8),
+    "foliage":  Surface("foliage",  tex="foliage",  uv_scale=1.0, normal_scale=0.9,
+                        double_sided=True),
+    "turf":     Surface("turf",     tex="turf",     uv_scale=4.0, normal_scale=0.6),
+    "asphalt":  Surface("asphalt",  tex="asphalt",  uv_scale=4.0, normal_scale=0.6),
+    "glass":    Surface("glass",    tex=None, uv_scale=1.0, color=(1, 1, 1, 0.28),
+                        roughness=0.06, double_sided=True),
+    "hidden":   Surface("wv_hidden", tex=None, uv_scale=1.0, color=(1, 1, 1, 0.0),
+                        double_sided=True),
+}
+
+# finish name -> (surface, tint hex, alpha)
+FINISH = {
+    "wall_int":      ("plaster",  "E9E4DA"),
+    "wall_ext":      ("plaster",  "C8BFAF"),
+    "wall_corridor": ("plaster",  "DCD7CC"),
+    "ceiling":       ("plaster",  "F3F0EA"),
+    "floor_tile":    ("tile",     "E6E1D7"),
+    "floor_wood":    ("timber",   "CDC6BA"),
+    "floor_bath":    ("tile",     "C6CED0"),
+    "floor_deck":    ("deck",     "BCB5A8"),
+    "glass":         ("glass",    "A8C8DA", 0.28),
+    "railing":       ("metal",    "8A9296"),
+    "door":          ("timber",   "BAB2A6"),
+    "counter":       ("granite",  "FFFFFF"),
+    "cabinet":       ("plaster",  "CFC8B9"),
+    "wood_furn":     ("timber",   "DAD3C8"),
+    "wood_dark":     ("timber",   "70675C"),
+    "fabric":        ("fabric",   "7E9497"),
+    "linen":         ("fabric",   "F2EEE6"),
+    "linen_alt":     ("fabric",   "CBD3CE"),
+    "steel":         ("metal",    "C6CCCF"),
+    "screen":        ("metal",    "26292B"),
+    "ceramic":       ("tile",     "FBFBF8"),
+    "appliance":     ("metal",    "E6E8E6"),
+    "planter":       ("concrete", "8A7A63"),
+    "foliage":       ("foliage",  "FFFFFF"),
+    "concrete":      ("concrete", "B6B3AB"),
+    "ground":        ("turf",     "9AA184"),
+    "grass":         ("turf",     "FFFFFF"),
+    "road":          ("asphalt",  "FFFFFF"),
+    "context":       ("concrete", "AAB0B4"),
+    "lift":          ("metal",    "9CA3A7"),
+    "signage":       ("plaster",  "C4341F"),
+    "wv_hidden":     ("hidden",   "FF00FF", 0.0),
 }
 
 
+def build_finishes(writer: GlbWriter) -> dict:
+    """Register every surface once, and resolve each finish to (index, tint, scale)."""
+    idx = {name: writer.surface(s) for name, s in SURFACES.items()}
+    out = {}
+    for finish, spec in FINISH.items():
+        surf_name, tint = spec[0], spec[1]
+        alpha = spec[2] if len(spec) > 2 else 1.0
+        surf = SURFACES[surf_name]
+        out[finish] = (idx[surf_name], hexc(tint, alpha), surf.uv_scale)
+    return out
+
+
 # --------------------------------------------------------------------------- #
-# Emitter — unit-local geometry with optional x-mirror
+# Emitter: unit-local geometry with optional x-mirror
 # --------------------------------------------------------------------------- #
 
 class Emitter:
-    def __init__(self, mb: MeshBuilder, mats: dict[str, int], mirror: bool = False):
+    def __init__(self, mb: MeshBuilder, fin: dict, mirror: bool = False):
         self.mb = mb
-        self.mats = mats
+        self.fin = fin
         self.mirror = mirror
 
     def mx(self, x: float) -> float:
         return (P.UNIT_W - x) if self.mirror else x
 
-    def box(self, x0, z0, x1, z1, y0, y1, mat: str, faces: str = "xXyYzZ"):
+    def box(self, x0, z0, x1, z1, y0, y1, finish: str, faces: str = "xXyYzZ"):
         ax, bx = self.mx(x0), self.mx(x1)
-        self.mb.box((min(ax, bx), y0, z0), (max(ax, bx), y1, z1), self.mats[mat], faces)
+        surf, tint, uvs = self.fin[finish]
+        self.mb.box((min(ax, bx), y0, z0), (max(ax, bx), y1, z1),
+                    surf, faces, uv_scale=uvs, color=tint)
 
 
 def collision_rect(x0, z0, x1, z1, y0, y1, mirror: bool):
@@ -104,10 +143,10 @@ OPENING_Y = {
 def emit_wall(em: Emitter, wall: dict, blocks: list) -> list[dict]:
     """Emit one wall's geometry and append the collision boxes it produces.
 
-    Visual geometry and collision are generated separately on purpose. A window
-    is a hole you can see through but not walk through, so its sill and lintel
-    are drawn as pieces while collision stays a single unbroken span. Only doors
-    and open balcony edges actually break the collision line.
+    Visual and collision spans are built by separate passes. A window is a hole
+    you can see through but not walk through, so the drawing breaks around its
+    sill and lintel while collision stays one unbroken span. Doors and open
+    balcony edges are the only openings that break the collision line.
     """
     axis, at, a, b, t = wall["axis"], wall["at"], wall["a"], wall["b"], wall["t"]
     mat = wall["mat"]
@@ -183,12 +222,13 @@ def emit_wall(em: Emitter, wall: dict, blocks: list) -> list[dict]:
         if y0 > 0.001:                                    # window or vent
             draw(s, e, 0.0, y0, mat)                      # sill wall
             pane(s, e, y0, y1, "glass")
-            # Reveal returns so the opening reads as a punched hole, not a decal.
+            # Reveal returns. Without them the opening reads as a decal
+            # painted on a flat wall.
             draw(s, s + 0.02, y0, y1, mat)
             draw(e - 0.02, e, y0, y1, mat)
             continue
 
-        # Door: frame, threshold, and a leaf swung open into the room.
+        # Door: two jambs, a head, and a leaf swung open into the room.
         w = e - s
         if axis == "x":
             em.box(at - 0.06, s - 0.06, at + 0.06, s, 0.0, y1 + 0.07, "door")
@@ -212,17 +252,19 @@ def emit_wall(em: Emitter, wall: dict, blocks: list) -> list[dict]:
 # Unit mesh
 # --------------------------------------------------------------------------- #
 
-def build_unit(writer: GlbWriter, mats: dict[str, int], mirror: bool):
+def build_unit(writer: GlbWriter, fin: dict, mirror: bool):
     mb = MeshBuilder()
-    em = Emitter(mb, mats, mirror)
+    em = Emitter(mb, fin, mirror)
     blocks: list = []
 
     # Floors and ceilings, per room.
     for room in P.ROOMS:
         for (x0, z0, x1, z1) in room["rects"]:
-            em.box(x0, z0, x1, z1, -0.02, 0.0, room["floor"], faces="Y")
+            # Sides as well as the top: the floor finish is a 20 mm layer over
+            # the structural slab, and on a balcony you see its edge.
+            em.box(x0, z0, x1, z1, -0.02, 0.0, room["floor"], faces="YxXzZ")
             if room["ceiling"]:
-                em.box(x0, z0, x1, z1, P.CEIL, P.CEIL + 0.02, "ceiling", faces="y")
+                em.box(x0, z0, x1, z1, P.CEIL - 0.035, P.CEIL - 0.015, "ceiling", faces="y")
 
     for wall in P.WALLS:
         emit_wall(em, wall, blocks)
@@ -323,7 +365,10 @@ def unit_tag_nodes(unit_key: str, level_id: str, mirror: bool, blocks: list,
         px, py, pz = poi["pos"]
         if mirror:
             px = P.UNIT_W - px
-        pid = f"{scope}.{poi['id']}"
+        # Namespaced under .poi so a POI id cannot collide with the ZONE it
+        # sits in. Ids are unique scene-wide, which is what the deep-link URLs
+        # depend on.
+        pid = f"{scope}.poi.{poi['id']}"
         out.append(Node(
             name=f"WV_POI__{pid}",
             translation=(px, py, pz),
@@ -394,10 +439,10 @@ def slab_with_void(em: Emitter, x0, z0, x1, z1, y0, y1, mat, faces="xXyYzZ"):
         em.box(vx1, vz0, x1, vz1, y0, y1, mat, faces)
 
 
-def build_common(writer: GlbWriter, mats: dict[str, int], typical: bool):
+def build_common(writer: GlbWriter, fin: dict, typical: bool):
     """Corridor + core for one floor. World space, origin at the building grid."""
     mb = MeshBuilder()
-    em = Emitter(mb, mats, mirror=False)
+    em = Emitter(mb, fin, mirror=False)
     blocks: list = []
 
     def blk(x0, z0, x1, z1, y0, y1, mat, collide=True, faces="xXyYzZ"):
@@ -409,8 +454,8 @@ def build_common(writer: GlbWriter, mats: dict[str, int], typical: bool):
     cz0, cz1 = P.BLD_Z0, 0.0
 
     # Corridor slab and ceiling.
-    em.box(cx0, cz0, cx1, cz1, -0.02, 0.0, "floor_tile", faces="Y")
-    em.box(cx0, cz0, cx1, cz1, P.CEIL, P.CEIL + 0.02, "ceiling", faces="y")
+    em.box(cx0, cz0, cx1, cz1, -0.02, 0.0, "floor_tile", faces="YxXzZ")
+    em.box(cx0, cz0, cx1, cz1, P.CEIL - 0.035, P.CEIL - 0.015, "ceiling", faces="y")
 
     # Corridor outer wall (north side) with openings for daylight.
     blk(cx0, cz0 - 0.1, cx1, cz0, 0.0, 1.0, "wall_ext")
@@ -424,13 +469,22 @@ def build_common(writer: GlbWriter, mats: dict[str, int], typical: bool):
     blk(cx0 - 0.2, cz0, cx0, cz1, 0.0, P.CEIL, "wall_ext")
     blk(cx1, cz0, cx1 + 0.2, cz1, 0.0, P.CEIL, "wall_ext")
 
-    # Core walls (lift shaft + stair enclosure), open to the corridor.
+    # Core walls (lift shaft plus stair enclosure), open to the corridor.
+    #
+    # On a typical floor the side walls sit inside the flats' party walls, which
+    # occupy the same 100 mm and are the face you actually see from the living
+    # room. Emitting the outer face here too puts two surfaces on one plane, so
+    # the buried face is dropped and the box stays for collision. The ground
+    # floor has no flats either side and the lobby looks straight at these
+    # walls, so there they keep every face.
     kx0, kx1, kz0, kz1 = P.CORE_X0, P.CORE_X1, P.CORE_Z0, P.CORE_Z1
-    blk(kx0 - 0.1, kz0, kx0, kz1, 0.0, P.CEIL, "wall_int")
-    blk(kx1, kz0, kx1 + 0.1, kz1, 0.0, P.CEIL, "wall_int")
+    west = "XyYzZ" if typical else "xXyYzZ"
+    east = "xyYzZ" if typical else "xXyYzZ"
+    blk(kx0 - 0.1, kz0, kx0, kz1, 0.0, P.CEIL, "wall_int", faces=west)
+    blk(kx1, kz0, kx1 + 0.1, kz1, 0.0, P.CEIL, "wall_int", faces=east)
     blk(kx0, kz1, kx1, kz1 + 0.1, 0.0, P.CEIL, "wall_int")
     slab_with_void(em, kx0, kz0, kx1, kz1, -0.02, 0.0, "floor_tile", faces="Y")
-    slab_with_void(em, kx0, kz0, kx1, kz1, P.CEIL, P.CEIL + 0.02, "ceiling", faces="y")
+    slab_with_void(em, kx0, kz0, kx1, kz1, P.CEIL - 0.035, P.CEIL - 0.015, "ceiling", faces="y")
 
     # Lift shaft wall and two lift doors facing the corridor.
     blk(kx0 + 0.3, 2.2, kx1 - 0.3, 2.3, 0.0, P.CEIL, "wall_int")
@@ -449,11 +503,11 @@ STAIR_Z1 = P.CORE_Z1 - 0.15
 STAIR_STEPS = 14
 
 
-def build_stair(writer: GlbWriter, mats: dict[str, int]):
-    """One flight, floor to floor. Instanced at every level including the ground,
-    so the building is actually continuously walkable without teleporting."""
+def build_stair(writer: GlbWriter, fin: dict):
+    """One flight, floor to floor. Instanced at every level, ground included,
+    so the whole building is walkable without a teleport between storeys."""
     mb = MeshBuilder()
-    em = Emitter(mb, mats, mirror=False)
+    em = Emitter(mb, fin, mirror=False)
     blocks: list = []
 
     rise = P.FLOOR_H / STAIR_STEPS
@@ -474,10 +528,10 @@ def build_stair(writer: GlbWriter, mats: dict[str, int]):
     return writer.mesh("stair_flight", mb), blocks, mb.triangle_count()
 
 
-def build_ground(writer: GlbWriter, mats: dict[str, int]):
+def build_ground(writer: GlbWriter, fin: dict):
     """Entrance lobby, stilt columns, plinth, and site context."""
     mb = MeshBuilder()
-    em = Emitter(mb, mats, mirror=False)
+    em = Emitter(mb, fin, mirror=False)
     blocks: list = []
 
     def blk(x0, z0, x1, z1, y0, y1, mat, collide=True, faces="xXyYzZ"):
@@ -485,20 +539,29 @@ def build_ground(writer: GlbWriter, mats: dict[str, int]):
         if collide:
             blocks.append((x0, y0, z0, x1, y1, z1))
 
-    # Site ground and approach.
-    em.box(-60, -60, 80, 70, -0.30, -0.15, "ground", faces="Y")
-    em.box(-14, -30, 36, P.BLD_Z1 + 14, -0.16, -0.14, "grass", faces="Y")
-    em.box(-14, -22, 36, -14.0, -0.13, -0.12, "road", faces="Y")
+    # Site ground and approach. Three planes over the same footprint, spaced
+    # 100 mm apart instead of the few millimetres a CAD section would use. At
+    # 60 m out the depth buffer cannot separate planes a few millimetres apart
+    # and they strobe. 100 mm is invisible from eye height and survives
+    # position quantisation in the wv build.
+    em.box(-60, -60, 80, 70, -0.40, -0.30, "ground", faces="Y")
+    em.box(-14, -30, 36, P.BLD_Z1 + 14, -0.30, -0.20, "grass", faces="Y")
+    em.box(-14, -22, 36, -14.0, -0.20, -0.10, "road", faces="Y")
 
-    # Plinth.
+    # Plinth. Its top stops 60 mm below finish floor level: the structural slab
+    # sits at -20 mm and the floor finish on top of that, so the three surfaces
+    # that cover this footprint each get their own plane.
     em.box(P.BLD_X0 - 1.4, P.BLD_Z0 - 1.4, P.BLD_X1 + 1.4, P.BLD_Z1 + 1.4,
-           -0.15, 0.0, "concrete", faces="YxXzZ")
+           -0.30, -0.06, "concrete", faces="YxXzZ")
 
-    # Lobby box.
+    # Lobby box. The floor and ceiling start at z = 0 because build_common
+    # already lays both across the full corridor strip behind the entrance;
+    # running the lobby slab back to the entrance line would put two coplanar
+    # 19 m2 planes on top of each other.
     lx0, lx1 = 6.0, 15.4
     lz0, lz1 = P.BLD_Z0, 5.2
-    em.box(lx0, lz0, lx1, lz1, -0.02, 0.0, "floor_tile", faces="Y")
-    em.box(lx0, lz0, lx1, lz1, P.CEIL, P.CEIL + 0.02, "ceiling", faces="y")
+    em.box(lx0, 0.0, lx1, lz1, -0.02, 0.0, "floor_tile", faces="YxXzZ")
+    em.box(lx0, 0.0, lx1, lz1, P.CEIL - 0.035, P.CEIL - 0.015, "ceiling", faces="y")
     blk(lx0 - 0.2, lz0, lx0, lz1, 0.0, P.CEIL, "wall_ext")
     blk(lx1, lz0, lx1 + 0.2, lz1, 0.0, P.CEIL, "wall_ext")
     blk(lx0, lz1, lx1, lz1 + 0.2, 0.0, P.CEIL, "wall_int")
@@ -547,18 +610,24 @@ def build_ground(writer: GlbWriter, mats: dict[str, int]):
     return writer.mesh("ground_lobby", mb), blocks, mb.triangle_count()
 
 
-def build_facade(writer: GlbWriter, mats: dict[str, int]):
-    """Per-floor slab band, emitted once and instanced at every level."""
+def build_facade(writer: GlbWriter, fin: dict):
+    """Per-floor slab band, emitted once and instanced at every level.
+
+    Slab top is at -20 mm. Every room lays its floor finish over the same
+    footprint with the top at 0, and two planes at one height do not resolve:
+    the whole floor plate shimmers as you walk it. 20 mm is the real screed
+    thickness, so nothing is given up by leaving the gap in.
+    """
     mb = MeshBuilder()
-    em = Emitter(mb, mats, mirror=False)
+    em = Emitter(mb, fin, mirror=False)
     slab_with_void(em, P.BLD_X0 - 0.35, P.BLD_Z0 - 0.35, P.BLD_X1 + 0.35, P.BLD_Z1 + 0.35,
-                   -P.SLAB, 0.0, "concrete")
+                   -P.SLAB, -0.02, "concrete")
     return writer.mesh("floor_band", mb), mb.triangle_count()
 
 
-def build_roof(writer: GlbWriter, mats: dict[str, int]):
+def build_roof(writer: GlbWriter, fin: dict):
     mb = MeshBuilder()
-    em = Emitter(mb, mats, mirror=False)
+    em = Emitter(mb, fin, mirror=False)
     blocks: list = []
     slab_with_void(em, P.BLD_X0 - 0.35, P.BLD_Z0 - 0.35, P.BLD_X1 + 0.35, P.BLD_Z1 + 0.35,
                    0.0, 0.12, "concrete")
@@ -594,30 +663,31 @@ def main(out_path: str):
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    w = GlbWriter()
-    mats = {k: w.material(v) for k, v in PALETTE.items()}
+    w = GlbWriter(tex_dir="tex")
+    fin = build_finishes(w)
+    hidden_surf, hidden_tint, _ = fin["wv_hidden"]
 
     # Shared primitive meshes used by every invisible tag volume.
     ub = MeshBuilder()
-    ub.box((0, 0, 0), (1, 1, 1), mats["wv_hidden"])
+    ub.box((0, 0, 0), (1, 1, 1), hidden_surf, color=hidden_tint)
     hidden_box = w.mesh("__wv_unit_box", ub)
 
     uq = MeshBuilder()
-    uq.quad((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1), mats["wv_hidden"])
+    uq.quad((0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1), hidden_surf, color=hidden_tint)
     hidden_quad = w.mesh("__wv_unit_quad", uq)
 
-    mesh_a, blocks_a, tris_a = build_unit(w, mats, mirror=False)
-    mesh_b, blocks_b, tris_b = build_unit(w, mats, mirror=True)
-    mesh_common, blocks_common, tris_common = build_common(w, mats, typical=True)
-    mesh_stair, blocks_stair, tris_stair = build_stair(w, mats)
-    mesh_ground, blocks_ground, tris_ground = build_ground(w, mats)
-    mesh_band, tris_band = build_facade(w, mats)
-    mesh_roof, blocks_roof, tris_roof = build_roof(w, mats)
+    mesh_a, blocks_a, tris_a = build_unit(w, fin, mirror=False)
+    mesh_b, blocks_b, tris_b = build_unit(w, fin, mirror=True)
+    mesh_common, blocks_common, tris_common = build_common(w, fin, typical=True)
+    mesh_stair, blocks_stair, tris_stair = build_stair(w, fin)
+    mesh_ground, blocks_ground, tris_ground = build_ground(w, fin)
+    mesh_band, tris_band = build_facade(w, fin)
+    mesh_roof, blocks_roof, tris_roof = build_roof(w, fin)
 
     root = Node(name="WalkthroughVisualizer_Scene", extras={"wv": {
         "type": "PROJECT",
         "id": "kp-tower",
-        "label": "Aster Residences — Tower B",
+        "label": "Template Project",
         "preset": "archviz",
         "schema": "0.1",
         "units": "metres",
@@ -745,8 +815,10 @@ def main(out_path: str):
             ox, oz = meta["origin"]
             flat_no = f"{li}0{1 if key == 'A' else 2}"
             unit_id = f"{lv['id'].lower()}.{key.lower()}"
-            # The unit node is a plain group. Its ZONE volume is a sibling of the
-            # geometry, never its parent — a tag must never own real geometry.
+            # The unit node is a plain group and its ZONE volume goes in as a
+            # sibling of the geometry. Hang real geometry off a tagged node and
+            # bakeTagVolumes in the wv build clears its mesh along with the
+            # placeholder box.
             unit = level.add(Node(name=f"UNIT_{lv['id']}_{key}", translation=(ox, 0.0, oz)))
             unit.add(Node(name=f"{unit_id}_geo", mesh=meta["mesh"]))
             unit.add(Node(
@@ -754,7 +826,7 @@ def main(out_path: str):
                 translation=(0.0, 0.0, 0.0), scale=(P.UNIT_W, P.CEIL, P.UNIT_D),
                 extras={"wv": {
                     "type": "ZONE", "id": unit_id,
-                    "label": f"Flat {flat_no} — 2 BHK",
+                    "label": f"Flat {flat_no} (2 BHK)",
                     "category": "unit", "level": lv["id"],
                     "area": 78.3, "tags": ["2bhk", "type-a" if key == "A" else "type-a-mirror"],
                 }},

@@ -12,13 +12,21 @@
     "dev": "npm run dev --workspace @wv/viewer",
     "build": "npm run build --workspace @wv/viewer",
     "preview": "npm run preview --workspace @wv/viewer",
-    "scene": "cd tools/modelgen && python3 generate_tower.py ../../apps/viewer/public/content/kp-tower/scene.glb",
+    "scene": "cd tools/modelgen && python3 textures.py ../../content-src/kp-tower/tex && python3 generate_tower.py ../../content-src/kp-tower/scene.glb",
     "verify": "node tools/verify/capture.mjs --serve apps/viewer/dist",
-    "check": "npm run scene && npm run build && npm run verify",
-    "verify:ci": "node tools/verify/capture.mjs --serve apps/viewer/dist --shots low --shot-budget 300000"
+    "check": "npm run content && npm run build && npm run verify",
+    "verify:ci": "node tools/verify/capture.mjs --serve apps/viewer/dist --shots low --shot-budget 300000",
+    "pipeline": "node tools/wv-cli/wv.mjs build content-src/kp-tower/scene.glb -o apps/viewer/public/content/kp-tower",
+    "content": "npm run scene && npm run pipeline",
+    "wv": "node tools/wv-cli/wv.mjs"
   },
   "license": "UNLICENSED",
   "devDependencies": {
-    "playwright": "^1.62.1"
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
+    "meshoptimizer": "^1.2.0",
+    "playwright": "^1.62.1",
+    "sharp": "^0.35.3"
   }
 }

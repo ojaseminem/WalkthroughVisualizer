@@ -1,22 +1,22 @@
 import * as THREE from 'three';
+import { buildTourPath } from './route.js';
 
 /**
  * Guided tour player.
  *
- * The first version flew along a spline and looked down the tangent, which meant
- * the camera stared at a doorway on the way through it and swung past whatever
- * the stop was actually about. This one separates the two: the path is still a
- * smoothed spline, but where the camera *looks* is chosen per stop — at the stop's
- * subject while dwelling, easing toward the next subject while travelling.
+ * The first version flew the spline and looked down the tangent. The camera
+ * stared at a doorway on the way through it and swung past whatever the stop was
+ * about. Position and aim are separate now: the path is still a smoothed spline,
+ * the look target is picked per stop, held while dwelling and eased toward the
+ * next one while travelling.
  *
- * It is also scrubbable. The whole tour is a single timeline of phases, so
- * seeking is a matter of picking a time, which makes prev/next/scrub one code
- * path instead of three.
+ * Where the path runs is route.js's problem. The whole tour is one timeline of
+ * phases, so prev, next and the scrubber are all a time to seek to.
  */
 
 const EASE_IO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const TRAVEL_SPEED = 1.25;      // m/s along the path — slower than walking, reads as considered
-const MIN_TRAVEL = 1.8;         // seconds, so adjacent stops still get a real move
+const TRAVEL_SPEED = 1.25;   // m/s along the path, a shade slower than walking
+const MIN_TRAVEL = 1.8;      // seconds, so adjacent stops still get a real move
 
 export class TourPlayer {
   constructor(tour, registry) {
@@ -25,24 +25,33 @@ export class TourPlayer {
     this.keys = tour.keys;
 
     const pts = this.keys.map((k) => k.position.clone());
-    this.curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.3);
 
-    // Map each stop to a normalised position along the curve by cumulative
-    // chord length, so a dwell lands on the stop and not near it.
-    const acc = [0];
-    for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1] + pts[i].distanceTo(pts[i - 1]));
-    const total = acc[acc.length - 1] || 1;
-    this.keyU = acc.map((v) => v / total);
+    // The route pass inserts doorway waypoints and pushes the curve off the
+    // walls, so the finished path is longer than the straight line through the
+    // stops and the stops no longer sit at even intervals along it. stopU says
+    // where each one landed.
+    const routed = buildTourPath(this.reg, pts);
+    this.curve = routed.curve;
+    this.path = routed.points;
+    this.keyU = routed.stopU;
+
+    // Travel time comes off the routed length. Use the straight-line distance
+    // and a leg that now goes the long way round through a door still gets the
+    // few seconds it had when it cut through the wall, so the camera sprints.
+    this.legLength = [];
+    for (let i = 1; i < pts.length; i++) {
+      this.legLength.push(this.curve.getLength() * Math.abs(this.keyU[i] - this.keyU[i - 1]));
+    }
 
     // Each stop looks at its subject: the POI or zone it names, else a point a
-    // little ahead on the path.
+    // little further along the path.
     this.lookAt = this.keys.map((k, i) => this._subjectFor(k, i, pts));
 
     this.phases = [];
     for (let i = 0; i < this.keys.length; i++) {
       this.phases.push({ kind: 'dwell', index: i, dur: Math.max(1.2, this.keys[i].dwell ?? 3) });
       if (i < this.keys.length - 1) {
-        const dist = pts[i].distanceTo(pts[i + 1]);
+        const dist = this.legLength[i] || pts[i].distanceTo(pts[i + 1]);
         this.phases.push({
           kind: 'move', index: i, to: i + 1,
           dur: Math.max(MIN_TRAVEL, dist / TRAVEL_SPEED),
@@ -117,9 +126,7 @@ export class TourPlayer {
     return { phase: last, local: 1 };
   }
 
-  /**
-   * Advances the tour and writes the camera. Returns the stop index in view.
-   */
+  /** Advances the tour and writes the camera. Returns the stop index in view. */
   update(camera, dt) {
     if (!this.paused) this.time += dt;
     if (this.time > this.duration) {
@@ -139,8 +146,8 @@ export class TourPlayer {
     } else {
       u = THREE.MathUtils.lerp(this.keyU[phase.index], this.keyU[phase.to], e);
       look = this.lookAt[phase.index].clone().lerp(this.lookAt[phase.to], e);
-      // Report the stop being approached once past halfway, so the label in the
-      // UI changes when the viewer can see where they are going.
+      // Report the stop being approached once past halfway, so the UI label
+      // changes when the viewer can see where they are going.
       this.stopIndex = e > 0.5 ? phase.to : phase.index;
     }
 

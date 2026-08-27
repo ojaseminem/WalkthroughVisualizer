@@ -3,12 +3,13 @@ import * as THREE from 'three';
 const CELL = 4.0;
 
 /**
- * A uniform grid over the scene's NAV_BLOCK volumes.
+ * Uniform grid over the scene's NAV_BLOCK volumes. CELL is 4 m, which lands a
+ * handful of blocks in each bucket on the flats we have tested.
  *
- * The player is treated as a vertical cylinder. Resolution pushes it out of each
- * overlapping box along the axis of least penetration, which is stable enough for
- * an interior walkthrough and costs nothing. The M2 navmesh replaces this for
- * pathfinding; this stays for free movement.
+ * The player is a vertical cylinder. resolve() pushes it out of every
+ * overlapping box along the axis of least penetration, which is cheap and
+ * stable enough indoors. The M2 navmesh takes over pathfinding; free movement
+ * stays here.
  */
 export class CollisionGrid {
   constructor(blocks) {
@@ -44,17 +45,19 @@ export class CollisionGrid {
 
   /**
    * @param pos      THREE.Vector3, mutated in place. y is the feet height.
-   * @param radius   player radius
-   * @param height   player height
-   * @param stepUp   boxes whose top is within this of the feet are walked over
+   * @param radius   player radius, metres
+   * @param height   player height, metres
+   * @param stepUp   boxes whose top is within this of the feet get walked over
    */
   resolve(pos, radius, height, stepUp) {
     const idx = this._scratch || (this._scratch = []);
     this.near(pos.x, pos.z, radius + 0.5, idx);
 
-    const feetLow = pos.y + stepUp;   // ignore anything below this — it is a step
+    const feetLow = pos.y + stepUp;   // a box topping out below this gets stepped over
     const headHigh = pos.y + height;
 
+    // Three passes. Pushing out of one box can push into its neighbour, and a
+    // fourth pass has never changed the resting position by more than a mm.
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
       for (const i of idx) {
@@ -76,7 +79,8 @@ export class CollisionGrid {
           pos.x += (dx / d) * push;
           pos.z += (dz / d) * push;
         } else {
-          // Centre is inside the box — eject along the shallowest face.
+          // Centre is inside the box, so there is no push direction to derive.
+          // Leave by whichever face is nearest.
           const left = pos.x - b.min.x, right = b.max.x - pos.x;
           const back = pos.z - b.min.z, front = b.max.z - pos.z;
           const m = Math.min(left, right, back, front);
@@ -97,7 +101,7 @@ export class GroundProbe {
   constructor(meshes) {
     this.meshes = meshes;
     this.ray = new THREE.Raycaster();
-    this.ray.far = 6.0;
+    this.ray.far = 6.0;   // one storey plus slack; misses become a null and a fall
     this.origin = new THREE.Vector3();
     this.down = new THREE.Vector3(0, -1, 0);
     this._n = new THREE.Vector3();

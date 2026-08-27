@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 import { buildRegistry, zoneAt, unitAt } from './registry.js';
 import { Player } from './player.js';
@@ -9,32 +8,38 @@ import { PoiLayer } from './pois.js';
 import { OrbitRig, ExplodeController, PoseBlend, VIEW_MODES } from './viewmodes.js';
 import { TourPlayer } from './tour.js';
 import { TouchControls, isTouchDevice } from './touch.js';
+import { SkyDome } from './sky.js';
 
 export { buildRegistry, zoneAt, unitAt, VIEW_MODES, isTouchDevice };
 
 /**
- * Time-of-day sets. These stand in for the baked lightmap sets that land in M5 —
- * the switching contract is identical, so nothing above this line changes when
- * the bakes arrive.
+ * Time-of-day sets. Stand-ins for the baked lightmap sets landing in M5. The
+ * switching contract is the same either way, so nothing above this line changes
+ * when the bakes arrive.
  */
 export const TIME_OF_DAY = {
   morning: {
     label: 'Morning', hour: '08:00',
-    sun: { azimuth: 1.95, elevation: 0.32, color: 0xffd7a8, intensity: 2.3 },
-    sky: 0xbcd6ee, groundBounce: 0x8d8574, hemi: 0.34, env: 0.30,
-    exposure: 0.86, fog: 0xd6dfe6, fogDensity: 0.0020,
+    sun: { azimuth: 1.95, elevation: 0.32, color: 0xffd2a0, intensity: 2.6 },
+    sky: 0xcbdff2, groundBounce: 0xd3c8b4, hemi: 0.10, env: 0.86,
+    skyLuminance: 0.92, bounce: 1.9, exposure: 0.98, fog: 0xdae2e8, fogDensity: 0.0018,
   },
   noon: {
     label: 'Midday', hour: '13:00',
-    sun: { azimuth: 0.55, elevation: 1.12, color: 0xfff3e0, intensity: 2.7 },
-    sky: 0xa9c8e8, groundBounce: 0x8f8a7c, hemi: 0.40, env: 0.34,
-    exposure: 0.80, fog: 0xcfdae4, fogDensity: 0.0016,
+    sun: { azimuth: 0.55, elevation: 1.12, color: 0xfff2dc, intensity: 3.1 },
+    sky: 0xbcd6ee, groundBounce: 0xdad2c2, hemi: 0.10, env: 0.90,
+    skyLuminance: 1.00, bounce: 1.9, exposure: 0.96, fog: 0xd3dde6, fogDensity: 0.0014,
   },
   evening: {
     label: 'Evening', hour: '18:30',
-    sun: { azimuth: -1.75, elevation: 0.16, color: 0xff9d5c, intensity: 2.0 },
-    sky: 0x8fa8c4, groundBounce: 0x60564a, hemi: 0.28, env: 0.26,
-    exposure: 0.94, fog: 0xd8c0a8, fogDensity: 0.0022,
+    // The sun was 0xff9450 at 2.4, which is sunset-photograph orange rather
+    // than the light in a room at half six. Anything it touched went orange,
+    // anything it missed went black, and the walls came out pink where the two
+    // met. A softer, weaker sun with more ambient behind it reads golden
+    // without turning the flat into a nightclub.
+    sun: { azimuth: -1.75, elevation: 0.20, color: 0xffb478, intensity: 1.9 },
+    sky: 0xafc2d8, groundBounce: 0xb8a68e, hemi: 0.10, env: 0.86,
+    skyLuminance: 0.80, bounce: 2.0, exposure: 1.02, fog: 0xd9c3ab, fogDensity: 0.0020,
   },
 };
 
@@ -80,8 +85,13 @@ export class WalkthroughViewer extends EventTarget {
     this.renderer = renderer;
 
     this.scene = new THREE.Scene();
+    // Near at 0.15 rather than 0.08. Depth precision falls off with the ratio
+    // between the two planes, and the player capsule is 0.32 across, so nothing
+    // ever gets closer to the eye than the near plane anyway. Far comes in to
+    // 250, which still clears the furthest context block with room to spare.
+    // Together they roughly halve the depth error out at the site boundary.
     this.camera = new THREE.PerspectiveCamera(
-      opts.fov ?? 62, container.clientWidth / container.clientHeight, 0.08, 400,
+      opts.fov ?? 62, container.clientWidth / container.clientHeight, 0.15, 250,
     );
 
     this.sun = new THREE.DirectionalLight(0xffffff, 3.0);
@@ -89,6 +99,8 @@ export class WalkthroughViewer extends EventTarget {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.055;
+    // Frustum is sized around the demo block. Anything on a wider site drops
+    // out of the shadow map with a hard edge, so these move with the scene.
     const sc = this.sun.shadow.camera;
     sc.left = -26; sc.right = 34; sc.top = 30; sc.bottom = -20;
     sc.near = 0.5; sc.far = 90;
@@ -98,10 +110,15 @@ export class WalkthroughViewer extends EventTarget {
     this.hemi = new THREE.HemisphereLight(0xbcd6ee, 0x9b917c, 0.6);
     this.scene.add(this.hemi);
 
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture;
+    // The sky is both the backdrop and the source of indirect light. Rebuilt
+    // whenever the time of day changes, and cached per preset because the PMREM
+    // pass is expensive enough to notice on a phone.
+    this.sky = new SkyDome();
+    this.scene.add(this.sky.mesh);
+    this._pmrem = new THREE.PMREMGenerator(renderer);
+    this._pmrem.compileEquirectangularShader();
+    this._envCache = new Map();
     this.scene.environmentIntensity = 0.32;
-    pmrem.dispose();
 
     this.walkFov = opts.fov ?? 62;
     this._onResize = () => this.resize();
@@ -149,15 +166,16 @@ export class WalkthroughViewer extends EventTarget {
 
     this.player = new Player(this.camera, this.renderer.domElement, this.reg);
     this.player.onLockChange = (locked) => this.emit('lock', { locked });
+    this.player.onDragChange = (dragging) => this.emit('drag', { dragging });
     this.pois = new PoiLayer(this.scene, this.reg);
 
     this.rig = new OrbitRig(this.camera, this.renderer.domElement);
     this.explode = new ExplodeController(this.reg, this.pois);
     this.blend = new PoseBlend();
 
-    // Framing is driven by the union of the tagged zones, not by the raw scene
-    // bounds — the ground plane and the context blocks are a hundred metres
-    // across, and fitting those puts the building in the middle distance.
+    // Framing comes off the union of the tagged zones. The raw scene bounds
+    // take in the ground plane and the context blocks, a hundred metres across,
+    // and fitting those leaves the building a speck in the middle distance.
     this.buildingBox = new THREE.Box3();
     for (const z of this.reg.zones) this.buildingBox.union(z.box);
     if (this.buildingBox.isEmpty()) {
@@ -221,15 +239,28 @@ export class WalkthroughViewer extends EventTarget {
     this.sun.target.position.set(11, 4, 4);
     this.sun.color.setHex(p.sun.color);
     this.sun.intensity = p.sun.intensity;
+    // The hemisphere used to carry most of the ambient light. Now that the
+    // environment map is a real sky the two say the same thing, and running both
+    // at full strength flattens everything. It is down to about a third of what
+    // it was and only holds a floor under the darkest surfaces.
     this.hemi.color.setHex(p.sky);
     this.hemi.groundColor.setHex(p.groundBounce);
     this.hemi.intensity = p.hemi;
-    // The image-based environment has no occlusion, so a high value floods
-    // interiors with light that should never reach them. Keep it low; the baked
-    // lightmaps in M5 are what actually carry interior bounce.
+
+    this.sky.apply(p);
+    if (!this._envCache.has(key)) {
+      this._envCache.set(key, this.sky.toEnvironment(this.renderer, this._pmrem, p.bounce ?? 2.4));
+    }
+    this.scene.environment = this._envCache.get(key).texture;
+    // Image-based light carries no occlusion of its own, so turning it up
+    // floods interiors with sky that should have been stopped by a wall. The
+    // baked lightmaps in M5 will carry real interior bounce. Until then this
+    // stays modest and the hemisphere does the rest.
     this.scene.environmentIntensity = p.env ?? 0.3;
     this.renderer.toneMappingExposure = p.exposure;
-    this.scene.background = new THREE.Color(p.fog);
+    // The dome is the background. Fog still tints distance, but it blends into
+    // a sky that has a horizon rather than into a flat plate of colour.
+    this.scene.background = null;
     this.scene.fog = new THREE.FogExp2(p.fog, p.fogDensity);
     this.renderer.shadowMap.needsUpdate = true;
     this.emit('timeofday', { key, label: p.label, hour: p.hour });
@@ -240,8 +271,8 @@ export class WalkthroughViewer extends EventTarget {
   /**
    * walk | dollhouse | plan | exploded.
    *
-   * Every mode change is a blend from the live camera pose to the new rig's
-   * pose, so the viewer never teleports and never loses their bearings.
+   * Every change blends from the live camera pose to the new rig's pose, so the
+   * viewer is never cut to a new position.
    */
   setViewMode(mode, { animate = true } = {}) {
     if (!VIEW_MODES[mode] || mode === this.viewMode) return;
@@ -388,7 +419,8 @@ export class WalkthroughViewer extends EventTarget {
     if (this.viewMode === 'walk') {
       this.player.enabled = true;
       if (this.touch) this.touch.setEnabled(true);
-      // Hand control back exactly where the camera is, not at a reset spawn.
+      // Drop the player where the camera ended up. Respawning at the lobby
+      // after a tour loses whatever the viewer was looking at.
       this.player.teleport(cam.x, (lv?.elevation ?? 0) + 0.2, cam.z);
       this.player.yaw = Math.atan2(-this._camForward().x, -this._camForward().z);
     }
@@ -451,7 +483,11 @@ export class WalkthroughViewer extends EventTarget {
       }
     } else if (this.viewMode === 'walk') {
       this.player.update(dt);
-      const hovered = this.player.controlActive ? this.pickAtCentre() : this.pois.hovered;
+      // Only while a look drag is running, because that is the only time a
+      // crosshair is on screen to pick with. Touch picks by tap instead, and
+      // gating this on controlActive ran a sprite raycast every frame on every
+      // phone for a crosshair the stylesheet had already hidden.
+      const hovered = this.player.dragging ? this.pickAtCentre() : this.pois.hovered;
       this.pois.setHovered(hovered);
     } else {
       this.rig.update(dt);
@@ -460,14 +496,14 @@ export class WalkthroughViewer extends EventTarget {
       this.camera.lookAt(this.rig.target);
     }
 
-    // The blend runs last: it reads the pose the active rig just wrote and eases
-    // the camera toward it, so a mode switch is one code path for all four modes.
+    // The blend runs last. It reads the pose the active rig just wrote and
+    // eases the camera toward it, which is why a mode switch is one code path.
     this.blend?.apply(this.camera, dt);
 
     this.pois.update(this.camera.position);
 
     // Zone readout, walk mode only. In an orbit mode the camera is not a person
-    // standing somewhere, so "you are in" would be a lie.
+    // standing anywhere, so "you are in" would be a lie.
     if (this.reg && this.viewMode === 'walk') {
       const feet = this.tourPlayer
         ? this.camera.position.clone().setY(this.camera.position.y - 1.6)
@@ -511,6 +547,9 @@ export class WalkthroughViewer extends EventTarget {
     this.player?.dispose();
     this.rig?.dispose();
     this.touch?.dispose();
+    this.sky?.dispose();
+    for (const rt of this._envCache.values()) rt.dispose();
+    this._pmrem?.dispose();
     this.renderer.dispose();
   }
 }

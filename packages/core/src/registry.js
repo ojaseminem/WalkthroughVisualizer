@@ -1,20 +1,21 @@
 import * as THREE from 'three';
 
 /**
- * Reads a loaded glTF scene and produces the typed entity registry the rest of
- * the runtime works against. This is the only file that knows the tag schema.
+ * Reads a loaded glTF scene into the typed entity registry the rest of the
+ * runtime works against. Only file that knows the tag schema, so a schema change
+ * stops here.
  *
- * Nothing here is project-specific. Give it any correctly tagged scene and it
- * produces the same shape of registry.
+ * No project knowledge in this file. Any correctly tagged scene gives back the
+ * same shape of registry.
  */
 
 const VOLUME_TYPES = new Set(['ZONE', 'NAV_FLOOR', 'NAV_BLOCK', 'PORTAL']);
 const EMPTY_TYPES = new Set(['POI', 'CAM_TOUR', 'CAM_KEY']);
 
-// Tag volumes are hidden with a render layer rather than `visible = false`,
-// because visibility is inherited and a tagged node may legitimately contain
-// real geometry — a ZONE wrapping a whole flat, say. Layers are per-object, so
-// the volume disappears and its children carry on rendering.
+// Tag volumes are hidden with a render layer, never `visible = false`.
+// Visibility is inherited, and a tagged node often wraps real geometry (a ZONE
+// around a whole flat). Layers are per-object, so the placeholder goes and its
+// children carry on rendering.
 const HIDDEN_LAYER = 2;
 
 function hideVolume(obj) {
@@ -23,6 +24,23 @@ function hideVolume(obj) {
 
 function isRenderable(obj) {
   return (obj.layers.mask & 1) !== 0;
+}
+
+/**
+ * A tag volume's world box.
+ *
+ * wv-cli bakes each volume down to `wv.aabb` and drops the placeholder mesh,
+ * taking hundreds of geometry-carrying nodes out of the shipped scene. Raw
+ * source scenes still carry the boxes, so both paths have to work. Use the
+ * baked numbers when present, otherwise measure the mesh.
+ */
+function volumeBox(obj, wv) {
+  if (Array.isArray(wv.aabb) && wv.aabb.length === 6) {
+    const [a, b, c, d, e, f] = wv.aabb;
+    return new THREE.Box3(new THREE.Vector3(a, b, c), new THREE.Vector3(d, e, f));
+  }
+  obj.updateWorldMatrix(true, false);
+  return new THREE.Box3().setFromObject(obj);
 }
 
 /** Parse `WV_<TYPE>__<id>__<label>` node names for DCCs that cannot write extras. */
@@ -90,8 +108,7 @@ export function buildRegistry(root) {
         reg.levelById.set(lv.id, lv);
         childLevel = lv.id;
       } else if (type === 'ZONE') {
-        obj.updateWorldMatrix(true, false);
-        const b = new THREE.Box3().setFromObject(obj);
+        const b = volumeBox(obj, wv);
         const zone = {
           id: wv.id,
           label: wv.label || titleCase(wv.id),
@@ -108,23 +125,20 @@ export function buildRegistry(root) {
         reg.zoneById.set(zone.id, zone);
         if (!zone.category) reg.warnings.push(`ZONE ${zone.id} has no category`);
       } else if (type === 'NAV_FLOOR') {
-        obj.updateWorldMatrix(true, false);
         reg.navFloors.push({
           id: wv.id, zone: wv.zone || null, level: resolvedLevel,
           surface: wv.surface || 'interior',
-          box: new THREE.Box3().setFromObject(obj), object: obj,
+          box: volumeBox(obj, wv), object: obj,
         });
       } else if (type === 'NAV_BLOCK') {
-        obj.updateWorldMatrix(true, false);
-        box.setFromObject(obj);
+        const b = volumeBox(obj, wv);
         reg.navBlocks.push({
-          min: box.min.clone(), max: box.max.clone(), level: resolvedLevel,
+          min: b.min.clone(), max: b.max.clone(), level: resolvedLevel,
         });
       } else if (type === 'PORTAL') {
-        obj.updateWorldMatrix(true, false);
         reg.portals.push({
           id: wv.id, connects: wv.connects || [], door: wv.door || 'open',
-          level: resolvedLevel, box: new THREE.Box3().setFromObject(obj),
+          level: resolvedLevel, box: volumeBox(obj, wv),
         });
       } else if (type === 'POI') {
         obj.updateWorldMatrix(true, false);
@@ -186,7 +200,7 @@ export function buildRegistry(root) {
   // overlaps it. Sorting once here keeps the per-frame lookup a linear scan.
   reg.zones.sort((a, b) => a.volume - b.volume);
 
-  // Validate portal wiring the way wv-cli will, but non-fatally at runtime.
+  // Same portal wiring check wv-cli does, but non-fatal at runtime.
   for (const p of reg.portals) {
     for (const c of p.connects) {
       if (!reg.zoneById.has(c)) reg.warnings.push(`PORTAL ${p.id} references missing zone "${c}"`);

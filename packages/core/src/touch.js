@@ -1,13 +1,13 @@
 /**
  * Touch controls for phones and tablets.
  *
- * Walk mode splits the screen: the left third is a floating stick that appears
- * where the thumb lands, and anywhere else is look-drag. The stick is floating
- * rather than fixed because thumbs land in different places on different hands
- * and phone sizes, and a fixed stick forces a regrip.
+ * Walk mode splits the screen. The left 38%, below the top third, is a stick
+ * that appears wherever the thumb lands; everything else is look-drag. The stick
+ * floats because the thumb lands somewhere different on every hand and handset,
+ * and a fixed one makes you regrip before you can move.
  *
- * In the orbit modes the rig owns the gestures, so this layer stands down
- * entirely rather than competing for the same pointers.
+ * The orbit rig owns the gestures in the other modes, so setEnabled(false) puts
+ * this layer down completely and the two handlers never fight over one pointer.
  */
 
 const STICK_RADIUS = 58;      // px, travel from centre to full deflection
@@ -24,9 +24,9 @@ export function isTouchDevice() {
 }
 
 function capture(el, id) {
-  // setPointerCapture throws if the pointer is no longer active — which happens
-  // on fast taps and on synthetic events. An exception here would abort the rest
-  // of the pointerdown handler and leave the control half-initialised.
+  // setPointerCapture throws once the pointer is no longer active, which happens
+  // on fast taps and on synthetic events. Letting it throw aborts the rest of
+  // the pointerdown handler and leaves the control half-initialised.
   try { el.setPointerCapture?.(id); } catch { /* not capturable, carry on */ }
 }
 
@@ -83,8 +83,8 @@ export class TouchControls {
         if (mag < DEAD_ZONE) {
           this.value.x = 0; this.value.y = 0;
         } else {
-          // Rescale past the dead zone so the first responsive pixel is a slow
-          // walk, not a lurch.
+          // Rescale from the dead-zone edge. Without it the first pixel past
+          // the dead zone jumps straight to 12% of full speed.
           const t = (mag - DEAD_ZONE) / (1 - DEAD_ZONE);
           this.value.x = (nx / mag) * t;
           this.value.y = (ny / mag) * t;

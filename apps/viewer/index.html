@@ -6,40 +6,38 @@
 <meta name="theme-color" content="#14181A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Aster Residences — Turtle Game Works</title>
+<title>Template Project | Turtle Game Works</title>
 <meta name="description" content="Interactive 3D walkthrough by Turtle Game Works.">
 <link rel="icon" href="./brand/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="./brand/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="./src/style.css">
 </head>
 <body class="booting">
 <div id="stage"></div>
 
-<!-- Virtual stick, positioned at the thumb by the touch layer -->
+<!-- Virtual stick. The touch layer moves it to wherever the thumb landed. -->
 <div id="stick" aria-hidden="true"><i></i><b></b></div>
 
 <!-- ---------------------------------------------------------------- Intro -->
-<div id="loader" class="overlay">
+<div id="loader" class="overlay" role="status" aria-live="polite">
   <div class="intro">
     <img id="intro-logo" src="./brand/tgw-white.png" alt="" width="132" height="99">
     <p class="studio">Turtle Game Works</p>
     <div class="intro-rule"></div>
-    <h1 id="load-title">Aster Residences</h1>
+    <h1 id="load-title">Template Project</h1>
     <p id="load-sub" class="sub">Tower B &middot; 2 BHK &middot; Pune</p>
-    <div class="bar"><div id="bar-fill"></div></div>
+    <div class="bar" role="progressbar" aria-label="Loading scene"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="bar-fill"></div></div>
     <p id="load-status" class="status">Preparing scene&hellip;</p>
   </div>
 </div>
 
 <!-- ------------------------------------------------------------- Start -->
-<div id="start" class="overlay hidden">
+<div id="start" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="start-title">
   <div class="intro">
     <img class="mini-logo" src="./brand/tgw-white.png" alt="" width="52" height="39">
     <p class="studio small">Turtle Game Works</p>
-    <h1>Walk the building</h1>
+    <h1 id="start-title">Walk the building</h1>
     <p class="sub" id="start-hint"></p>
     <button id="start-btn" class="primary">Enter walkthrough</button>
     <button id="tour-start-btn" class="ghost">Take the guided tour</button>
@@ -48,11 +46,21 @@
 
 <!-- ---------------------------------------------------------------- HUD -->
 <header id="hud-top">
-  <div class="brand">
-    <img src="./brand/tgw-white.png" alt="Turtle Game Works" width="30" height="23">
-    <div>
-      <p id="proj-name">Aster Residences — Tower B</p>
-      <p class="mono studio-line">Turtle Game Works</p>
+  <!-- Identity sits above the location readout so the top left corner is one
+       column instead of two unrelated floaters. -->
+  <div class="hud-left">
+    <div class="brand panel-chrome">
+      <img src="./brand/tgw-white.png" alt="" width="28" height="21">
+      <div>
+        <p id="proj-name">Template Project</p>
+        <p class="studio-line">Turtle Game Works</p>
+      </div>
+    </div>
+
+    <div id="locus" class="panel-chrome">
+      <p class="lbl">You are in</p>
+      <p id="locus-zone" aria-live="polite">&ensp;</p>
+      <p id="locus-meta" class="mono"></p>
     </div>
   </div>
 
@@ -65,20 +73,16 @@
       <span><b id="s-tris">--</b>tris</span>
       <span id="s-budget" class="badge ok">ok</span>
     </div>
-    <button id="btn-stats" class="icon-btn panel-chrome" title="Performance (P)" aria-label="Performance">
-      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2 13V8m4 5V4m4 9V6m4 7V2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
+    <button id="btn-stats" class="icon-btn panel-chrome" title="Performance (P)"
+            aria-label="Performance" aria-pressed="false">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 13V8m4 5V4m4 9V6m4 7V2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
     </button>
   </div>
 </header>
 
 <div id="crosshair"><span></span></div>
+<p id="control-hint" class="hidden" role="status"><b>Hold right mouse button</b> to look around and walk</p>
 <div id="hover-label" class="hidden"></div>
-
-<div id="locus" class="panel-chrome">
-  <p class="mono lbl">You are in</p>
-  <p id="locus-zone">&mdash;</p>
-  <p id="locus-meta" class="mono"></p>
-</div>
 
 <nav id="levels" class="panel-chrome" aria-label="Levels"></nav>
 
@@ -87,19 +91,19 @@
 </div>
 
 <div id="bottom-right">
-  <button id="btn-rooms" class="chip">Rooms</button>
-  <button id="btn-tour" class="chip accent">Guided tour</button>
+  <button id="btn-rooms" class="chip" aria-expanded="false" aria-controls="rooms">Rooms</button>
+  <button id="btn-tour" class="chip accent" aria-pressed="false">Guided tour</button>
   <button id="btn-help" class="chip icon-only" title="Controls" aria-label="Controls">?</button>
 </div>
 
 <!-- ------------------------------------------------------------- Drawers -->
 <aside id="rooms" class="drawer hidden" aria-label="Room directory">
-  <header><h2>Directory</h2><button class="x" data-close="rooms" aria-label="Close">&times;</button></header>
+  <header><h2>Directory</h2><button class="x icon-btn" data-close="rooms" aria-label="Close directory">&times;</button></header>
   <div id="rooms-list"></div>
 </aside>
 
 <aside id="poi" class="drawer hidden" aria-label="Point of interest">
-  <header><h2 id="poi-title">&mdash;</h2><button class="x" data-close="poi" aria-label="Close">&times;</button></header>
+  <header><h2 id="poi-title">&ensp;</h2><button class="x icon-btn" data-close="poi" aria-label="Close panel">&times;</button></header>
   <div class="drawer-body">
     <p id="poi-body"></p>
     <dl id="poi-fields"></dl>
@@ -113,7 +117,7 @@
     <div class="tour-head">
       <div>
         <p class="mono lbl"><span id="tour-count">1 / 7</span> &middot; Guided tour</p>
-        <strong id="tour-stop">&mdash;</strong>
+        <strong id="tour-stop">&ensp;</strong>
       </div>
       <div class="tour-controls">
         <button id="tour-prev" class="icon-btn" title="Previous stop" aria-label="Previous stop">
@@ -135,7 +139,7 @@
   </div>
 </div>
 
-<div id="toast" class="hidden"></div>
+<div id="toast" class="hidden" role="status" aria-live="polite"></div>
 
 <script type="module" src="./src/main.js"></script>
 </body>

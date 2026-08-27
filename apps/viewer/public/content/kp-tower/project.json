@@ -1,0 +1,874 @@
+{
+  "schema": "0.1",
+  "generated": "2026-08-27T10:48:22.028Z",
+  "project": {
+    "id": "kp-tower",
+    "label": "Template Project",
+    "preset": "archviz",
+    "units": "metres"
+  },
+  "scene": "scene.glb",
+  "levels": [
+    {
+      "id": "L00",
+      "label": "Ground Floor",
+      "elevation": 0
+    },
+    {
+      "id": "L01",
+      "label": "First Floor",
+      "elevation": 3
+    },
+    {
+      "id": "L02",
+      "label": "Second Floor",
+      "elevation": 6
+    },
+    {
+      "id": "L03",
+      "label": "Third Floor",
+      "elevation": 9
+    },
+    {
+      "id": "ROOF",
+      "label": "Terrace",
+      "elevation": 12
+    }
+  ],
+  "counts": {
+    "zones": 69,
+    "pois": 38,
+    "portals": 54,
+    "navFloors": 73,
+    "navBlocks": 355
+  },
+  "zones": [
+    {
+      "id": "roof.terrace",
+      "label": "Terrace",
+      "category": "amenity",
+      "level": "ROOF",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l03.b.sundeck",
+      "label": "Sundeck",
+      "category": "balcony",
+      "level": "L03",
+      "area": 6.72,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.mbath",
+      "label": "Master Bathroom",
+      "category": "bath",
+      "level": "L03",
+      "area": 2.4,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.mbed",
+      "label": "Master Bedroom",
+      "category": "bedroom",
+      "level": "L03",
+      "area": 10.8,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.bath2",
+      "label": "Common Bathroom",
+      "category": "bath",
+      "level": "L03",
+      "area": 3.6,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.bed2",
+      "label": "Bedroom 2",
+      "category": "bedroom",
+      "level": "L03",
+      "area": 8.96,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.drybalcony",
+      "label": "Dry Balcony",
+      "category": "balcony",
+      "level": "L03",
+      "area": 3.36,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.kitchen",
+      "label": "Kitchen",
+      "category": "kitchen",
+      "level": "L03",
+      "area": 8.96,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.foyer",
+      "label": "Foyer",
+      "category": "circulation",
+      "level": "L03",
+      "area": 3.2,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b.living",
+      "label": "Living & Dining",
+      "category": "living",
+      "level": "L03",
+      "area": 36,
+      "parent": "l03.b"
+    },
+    {
+      "id": "l03.b",
+      "label": "Flat 302 (2 BHK)",
+      "category": "unit",
+      "level": "L03",
+      "area": 78.3,
+      "parent": null
+    },
+    {
+      "id": "l03.a.sundeck",
+      "label": "Sundeck",
+      "category": "balcony",
+      "level": "L03",
+      "area": 6.72,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.mbath",
+      "label": "Master Bathroom",
+      "category": "bath",
+      "level": "L03",
+      "area": 2.4,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.mbed",
+      "label": "Master Bedroom",
+      "category": "bedroom",
+      "level": "L03",
+      "area": 10.8,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.bath2",
+      "label": "Common Bathroom",
+      "category": "bath",
+      "level": "L03",
+      "area": 3.6,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.bed2",
+      "label": "Bedroom 2",
+      "category": "bedroom",
+      "level": "L03",
+      "area": 8.96,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.drybalcony",
+      "label": "Dry Balcony",
+      "category": "balcony",
+      "level": "L03",
+      "area": 3.36,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.kitchen",
+      "label": "Kitchen",
+      "category": "kitchen",
+      "level": "L03",
+      "area": 8.96,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.foyer",
+      "label": "Foyer",
+      "category": "circulation",
+      "level": "L03",
+      "area": 3.2,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a.living",
+      "label": "Living & Dining",
+      "category": "living",
+      "level": "L03",
+      "area": 36,
+      "parent": "l03.a"
+    },
+    {
+      "id": "l03.a",
+      "label": "Flat 301 (2 BHK)",
+      "category": "unit",
+      "level": "L03",
+      "area": 78.3,
+      "parent": null
+    },
+    {
+      "id": "l03.liftlobby",
+      "label": "Lift Lobby",
+      "category": "circulation",
+      "level": "L03",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l03.corridor",
+      "label": "Corridor",
+      "category": "circulation",
+      "level": "L03",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l02.b.sundeck",
+      "label": "Sundeck",
+      "category": "balcony",
+      "level": "L02",
+      "area": 6.72,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.mbath",
+      "label": "Master Bathroom",
+      "category": "bath",
+      "level": "L02",
+      "area": 2.4,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.mbed",
+      "label": "Master Bedroom",
+      "category": "bedroom",
+      "level": "L02",
+      "area": 10.8,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.bath2",
+      "label": "Common Bathroom",
+      "category": "bath",
+      "level": "L02",
+      "area": 3.6,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.bed2",
+      "label": "Bedroom 2",
+      "category": "bedroom",
+      "level": "L02",
+      "area": 8.96,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.drybalcony",
+      "label": "Dry Balcony",
+      "category": "balcony",
+      "level": "L02",
+      "area": 3.36,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.kitchen",
+      "label": "Kitchen",
+      "category": "kitchen",
+      "level": "L02",
+      "area": 8.96,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.foyer",
+      "label": "Foyer",
+      "category": "circulation",
+      "level": "L02",
+      "area": 3.2,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b.living",
+      "label": "Living & Dining",
+      "category": "living",
+      "level": "L02",
+      "area": 36,
+      "parent": "l02.b"
+    },
+    {
+      "id": "l02.b",
+      "label": "Flat 202 (2 BHK)",
+      "category": "unit",
+      "level": "L02",
+      "area": 78.3,
+      "parent": null
+    },
+    {
+      "id": "l02.a.sundeck",
+      "label": "Sundeck",
+      "category": "balcony",
+      "level": "L02",
+      "area": 6.72,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.mbath",
+      "label": "Master Bathroom",
+      "category": "bath",
+      "level": "L02",
+      "area": 2.4,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.mbed",
+      "label": "Master Bedroom",
+      "category": "bedroom",
+      "level": "L02",
+      "area": 10.8,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.bath2",
+      "label": "Common Bathroom",
+      "category": "bath",
+      "level": "L02",
+      "area": 3.6,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.bed2",
+      "label": "Bedroom 2",
+      "category": "bedroom",
+      "level": "L02",
+      "area": 8.96,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.drybalcony",
+      "label": "Dry Balcony",
+      "category": "balcony",
+      "level": "L02",
+      "area": 3.36,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.kitchen",
+      "label": "Kitchen",
+      "category": "kitchen",
+      "level": "L02",
+      "area": 8.96,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.foyer",
+      "label": "Foyer",
+      "category": "circulation",
+      "level": "L02",
+      "area": 3.2,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a.living",
+      "label": "Living & Dining",
+      "category": "living",
+      "level": "L02",
+      "area": 36,
+      "parent": "l02.a"
+    },
+    {
+      "id": "l02.a",
+      "label": "Flat 201 (2 BHK)",
+      "category": "unit",
+      "level": "L02",
+      "area": 78.3,
+      "parent": null
+    },
+    {
+      "id": "l02.liftlobby",
+      "label": "Lift Lobby",
+      "category": "circulation",
+      "level": "L02",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l02.corridor",
+      "label": "Corridor",
+      "category": "circulation",
+      "level": "L02",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l01.b.sundeck",
+      "label": "Sundeck",
+      "category": "balcony",
+      "level": "L01",
+      "area": 6.72,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.mbath",
+      "label": "Master Bathroom",
+      "category": "bath",
+      "level": "L01",
+      "area": 2.4,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.mbed",
+      "label": "Master Bedroom",
+      "category": "bedroom",
+      "level": "L01",
+      "area": 10.8,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.bath2",
+      "label": "Common Bathroom",
+      "category": "bath",
+      "level": "L01",
+      "area": 3.6,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.bed2",
+      "label": "Bedroom 2",
+      "category": "bedroom",
+      "level": "L01",
+      "area": 8.96,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.drybalcony",
+      "label": "Dry Balcony",
+      "category": "balcony",
+      "level": "L01",
+      "area": 3.36,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.kitchen",
+      "label": "Kitchen",
+      "category": "kitchen",
+      "level": "L01",
+      "area": 8.96,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.foyer",
+      "label": "Foyer",
+      "category": "circulation",
+      "level": "L01",
+      "area": 3.2,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b.living",
+      "label": "Living & Dining",
+      "category": "living",
+      "level": "L01",
+      "area": 36,
+      "parent": "l01.b"
+    },
+    {
+      "id": "l01.b",
+      "label": "Flat 102 (2 BHK)",
+      "category": "unit",
+      "level": "L01",
+      "area": 78.3,
+      "parent": null
+    },
+    {
+      "id": "l01.a.sundeck",
+      "label": "Sundeck",
+      "category": "balcony",
+      "level": "L01",
+      "area": 6.72,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.mbath",
+      "label": "Master Bathroom",
+      "category": "bath",
+      "level": "L01",
+      "area": 2.4,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.mbed",
+      "label": "Master Bedroom",
+      "category": "bedroom",
+      "level": "L01",
+      "area": 10.8,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.bath2",
+      "label": "Common Bathroom",
+      "category": "bath",
+      "level": "L01",
+      "area": 3.6,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.bed2",
+      "label": "Bedroom 2",
+      "category": "bedroom",
+      "level": "L01",
+      "area": 8.96,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.drybalcony",
+      "label": "Dry Balcony",
+      "category": "balcony",
+      "level": "L01",
+      "area": 3.36,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.kitchen",
+      "label": "Kitchen",
+      "category": "kitchen",
+      "level": "L01",
+      "area": 8.96,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.foyer",
+      "label": "Foyer",
+      "category": "circulation",
+      "level": "L01",
+      "area": 3.2,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a.living",
+      "label": "Living & Dining",
+      "category": "living",
+      "level": "L01",
+      "area": 36,
+      "parent": "l01.a"
+    },
+    {
+      "id": "l01.a",
+      "label": "Flat 101 (2 BHK)",
+      "category": "unit",
+      "level": "L01",
+      "area": 78.3,
+      "parent": null
+    },
+    {
+      "id": "l01.liftlobby",
+      "label": "Lift Lobby",
+      "category": "circulation",
+      "level": "L01",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l01.corridor",
+      "label": "Corridor",
+      "category": "circulation",
+      "level": "L01",
+      "area": null,
+      "parent": null
+    },
+    {
+      "id": "l00.liftlobby",
+      "label": "Lift Lobby",
+      "category": "circulation",
+      "level": "L00",
+      "area": 22,
+      "parent": null
+    },
+    {
+      "id": "l00.lobby",
+      "label": "Entrance Lobby",
+      "category": "amenity",
+      "level": "L00",
+      "area": 62.1,
+      "parent": null
+    }
+  ],
+  "pois": [
+    {
+      "id": "roof.view",
+      "label": "Terrace",
+      "level": "ROOF",
+      "zone": "roof.terrace"
+    },
+    {
+      "id": "l03.b.poi.sundeck",
+      "label": "Sundeck",
+      "level": "L03",
+      "zone": "l03.b.sundeck"
+    },
+    {
+      "id": "l03.b.poi.bed2",
+      "label": "Bedroom 2",
+      "level": "L03",
+      "zone": "l03.b.bed2"
+    },
+    {
+      "id": "l03.b.poi.mbed",
+      "label": "Master Bedroom",
+      "level": "L03",
+      "zone": "l03.b.mbed"
+    },
+    {
+      "id": "l03.b.poi.drybalcony",
+      "label": "Dry Balcony",
+      "level": "L03",
+      "zone": "l03.b.drybalcony"
+    },
+    {
+      "id": "l03.b.poi.kitchen",
+      "label": "Modular Kitchen",
+      "level": "L03",
+      "zone": "l03.b.kitchen"
+    },
+    {
+      "id": "l03.b.poi.living",
+      "label": "L-shaped Living & Dining",
+      "level": "L03",
+      "zone": "l03.b.living"
+    },
+    {
+      "id": "l03.a.poi.sundeck",
+      "label": "Sundeck",
+      "level": "L03",
+      "zone": "l03.a.sundeck"
+    },
+    {
+      "id": "l03.a.poi.bed2",
+      "label": "Bedroom 2",
+      "level": "L03",
+      "zone": "l03.a.bed2"
+    },
+    {
+      "id": "l03.a.poi.mbed",
+      "label": "Master Bedroom",
+      "level": "L03",
+      "zone": "l03.a.mbed"
+    },
+    {
+      "id": "l03.a.poi.drybalcony",
+      "label": "Dry Balcony",
+      "level": "L03",
+      "zone": "l03.a.drybalcony"
+    },
+    {
+      "id": "l03.a.poi.kitchen",
+      "label": "Modular Kitchen",
+      "level": "L03",
+      "zone": "l03.a.kitchen"
+    },
+    {
+      "id": "l03.a.poi.living",
+      "label": "L-shaped Living & Dining",
+      "level": "L03",
+      "zone": "l03.a.living"
+    },
+    {
+      "id": "l02.b.poi.sundeck",
+      "label": "Sundeck",
+      "level": "L02",
+      "zone": "l02.b.sundeck"
+    },
+    {
+      "id": "l02.b.poi.bed2",
+      "label": "Bedroom 2",
+      "level": "L02",
+      "zone": "l02.b.bed2"
+    },
+    {
+      "id": "l02.b.poi.mbed",
+      "label": "Master Bedroom",
+      "level": "L02",
+      "zone": "l02.b.mbed"
+    },
+    {
+      "id": "l02.b.poi.drybalcony",
+      "label": "Dry Balcony",
+      "level": "L02",
+      "zone": "l02.b.drybalcony"
+    },
+    {
+      "id": "l02.b.poi.kitchen",
+      "label": "Modular Kitchen",
+      "level": "L02",
+      "zone": "l02.b.kitchen"
+    },
+    {
+      "id": "l02.b.poi.living",
+      "label": "L-shaped Living & Dining",
+      "level": "L02",
+      "zone": "l02.b.living"
+    },
+    {
+      "id": "l02.a.poi.sundeck",
+      "label": "Sundeck",
+      "level": "L02",
+      "zone": "l02.a.sundeck"
+    },
+    {
+      "id": "l02.a.poi.bed2",
+      "label": "Bedroom 2",
+      "level": "L02",
+      "zone": "l02.a.bed2"
+    },
+    {
+      "id": "l02.a.poi.mbed",
+      "label": "Master Bedroom",
+      "level": "L02",
+      "zone": "l02.a.mbed"
+    },
+    {
+      "id": "l02.a.poi.drybalcony",
+      "label": "Dry Balcony",
+      "level": "L02",
+      "zone": "l02.a.drybalcony"
+    },
+    {
+      "id": "l02.a.poi.kitchen",
+      "label": "Modular Kitchen",
+      "level": "L02",
+      "zone": "l02.a.kitchen"
+    },
+    {
+      "id": "l02.a.poi.living",
+      "label": "L-shaped Living & Dining",
+      "level": "L02",
+      "zone": "l02.a.living"
+    },
+    {
+      "id": "l01.b.poi.sundeck",
+      "label": "Sundeck",
+      "level": "L01",
+      "zone": "l01.b.sundeck"
+    },
+    {
+      "id": "l01.b.poi.bed2",
+      "label": "Bedroom 2",
+      "level": "L01",
+      "zone": "l01.b.bed2"
+    },
+    {
+      "id": "l01.b.poi.mbed",
+      "label": "Master Bedroom",
+      "level": "L01",
+      "zone": "l01.b.mbed"
+    },
+    {
+      "id": "l01.b.poi.drybalcony",
+      "label": "Dry Balcony",
+      "level": "L01",
+      "zone": "l01.b.drybalcony"
+    },
+    {
+      "id": "l01.b.poi.kitchen",
+      "label": "Modular Kitchen",
+      "level": "L01",
+      "zone": "l01.b.kitchen"
+    },
+    {
+      "id": "l01.b.poi.living",
+      "label": "L-shaped Living & Dining",
+      "level": "L01",
+      "zone": "l01.b.living"
+    },
+    {
+      "id": "l01.a.poi.sundeck",
+      "label": "Sundeck",
+      "level": "L01",
+      "zone": "l01.a.sundeck"
+    },
+    {
+      "id": "l01.a.poi.bed2",
+      "label": "Bedroom 2",
+      "level": "L01",
+      "zone": "l01.a.bed2"
+    },
+    {
+      "id": "l01.a.poi.mbed",
+      "label": "Master Bedroom",
+      "level": "L01",
+      "zone": "l01.a.mbed"
+    },
+    {
+      "id": "l01.a.poi.drybalcony",
+      "label": "Dry Balcony",
+      "level": "L01",
+      "zone": "l01.a.drybalcony"
+    },
+    {
+      "id": "l01.a.poi.kitchen",
+      "label": "Modular Kitchen",
+      "level": "L01",
+      "zone": "l01.a.kitchen"
+    },
+    {
+      "id": "l01.a.poi.living",
+      "label": "L-shaped Living & Dining",
+      "level": "L01",
+      "zone": "l01.a.living"
+    },
+    {
+      "id": "l00.reception",
+      "label": "Reception",
+      "level": "L00",
+      "zone": "l00.lobby"
+    }
+  ],
+  "tours": [
+    {
+      "id": "l03.b.walkthrough",
+      "label": "Unit walkthrough",
+      "level": "L03",
+      "stops": 7
+    },
+    {
+      "id": "l03.a.walkthrough",
+      "label": "Unit walkthrough",
+      "level": "L03",
+      "stops": 7
+    },
+    {
+      "id": "l02.b.walkthrough",
+      "label": "Unit walkthrough",
+      "level": "L02",
+      "stops": 7
+    },
+    {
+      "id": "l02.a.walkthrough",
+      "label": "Unit walkthrough",
+      "level": "L02",
+      "stops": 7
+    },
+    {
+      "id": "l01.b.walkthrough",
+      "label": "Unit walkthrough",
+      "level": "L01",
+      "stops": 7
+    },
+    {
+      "id": "l01.a.walkthrough",
+      "label": "Unit walkthrough",
+      "level": "L01",
+      "stops": 7
+    }
+  ],
+  "budget": {
+    "drawCalls": 45,
+    "primitives": 45,
+    "triangles": 16640,
+    "textureBytes": 656024,
+    "fileBytes": 1198336
+  }
+}
